@@ -26,11 +26,26 @@ export type PoiInput = {
   valid_to: string | Date;
 };
 
-const url =
-  process.env.DATABASE_URL ??
-  "postgres://poiman:poiman@localhost:5432/poiman";
+// Connection precedence:
+//   1. PG{HOST,PORT,USER,PASSWORD,DATABASE} - injected by the Entur common
+//      Helm chart from the CloudSQL secret (secret_key_prefix = "PG").
+//   2. DATABASE_URL - used by docker-compose for local dev.
+//   3. Hard-coded localhost default - last resort, only useful if you
+//      forget to set anything.
+function connectionUrl(): string {
+  const e = process.env;
+  if (e.PGHOST && e.PGUSER && e.PGPASSWORD) {
+    const host = encodeURIComponent(e.PGHOST);
+    const user = encodeURIComponent(e.PGUSER);
+    const pass = encodeURIComponent(e.PGPASSWORD);
+    const port = e.PGPORT ?? "5432";
+    const db = e.PGDATABASE ?? "poiman";
+    return `postgres://${user}:${pass}@${host}:${port}/${db}`;
+  }
+  return e.DATABASE_URL ?? "postgres://poiman:poiman@localhost:5432/poiman";
+}
 
-export const sql = new SQL(url);
+export const sql = new SQL(connectionUrl());
 
 export async function migrate(migrationsDir: string): Promise<void> {
   await sql`
