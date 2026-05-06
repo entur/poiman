@@ -3,3 +3,8 @@ common:
   ingress:
     host: poiman.dev.entur.io
     trafficType: api
+  configmap:
+    data:
+      OIDC_AUTHORITY: https://partner.dev.entur.org
+      OIDC_CLIENT_ID: "" # set after team sikkerhet provisions the SPA client
+      OIDC_AUDIENCE: https://api.dev.entur.io

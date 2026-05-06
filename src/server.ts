@@ -10,7 +10,9 @@ import {
 } from "./routes/pois.ts";
 import { exportNetex } from "./routes/export.ts";
 import { importNetex } from "./routes/import.ts";
-import { me } from "./routes/me.ts";
+import { config } from "./routes/config.ts";
+import { authenticate } from "./auth.ts";
+import { configured as oidcConfigured } from "./oidc.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ROOT = import.meta.dir;
@@ -18,13 +20,27 @@ const WEB_DIST = join(ROOT, "..", "dist", "web");
 const WEB_SRC = join(ROOT, "web");
 const DEV = process.env.POIMAN_DEV === "1";
 
-// Refuse to boot if the dev fallback is enabled in a production-like env.
-// Without this guard, `userEmail()` would silently stamp every edit as
-// `dev@local` instead of the real signed-in user.
-if (DEV && process.env.NODE_ENV === "production") {
+// Refuse to boot if the dev fallback is enabled outside an explicit
+// development env. Without this guard, the dev short-circuit in auth.ts
+// would silently stamp every edit as the dev fallback user. The
+// docker-compose.yml dev workflow sets NODE_ENV=development; the prd
+// Helm chart sets NODE_ENV=production via the Dockerfile.
+if (DEV && process.env.NODE_ENV !== "development") {
   console.error(
-    "FATAL: POIMAN_DEV=1 is set in a production environment. " +
-      "This would stamp every edit as the dev fallback user. Refusing to start.",
+    "FATAL: POIMAN_DEV=1 requires NODE_ENV=development. " +
+      "Without an explicit development env, the dev fallback user could " +
+      "ship to a real environment. Refusing to start.",
+  );
+  process.exit(1);
+}
+
+// Refuse to boot in non-dev mode if OIDC isn't configured. Otherwise the
+// SPA loads (with /config.json returning oidcConfig:null) and the API
+// runs unauthenticated. Loud failure is better than silent insecurity.
+if (!DEV && !oidcConfigured) {
+  console.error(
+    "FATAL: OIDC_AUTHORITY/OIDC_CLIENT_ID/OIDC_AUDIENCE must all be set " +
+      "in non-dev environments. Set POIMAN_DEV=1 only for local development.",
   );
   process.exit(1);
 }
@@ -66,29 +82,11 @@ function metrics(): Response {
 
 const POI_ID_RE = /^\/api\/pois\/(\d+)$/;
 
-const WRITE_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
-
-// CSRF: writes are gated to same-origin requests. The IAP/Auth0 frontdoor
-// passes `X-Forwarded-Email` for any logged-in user, so any tab the user
-// has open could otherwise be coerced into POSTing on their behalf. We
-// reject write requests whose Origin (or Referer fallback) doesn't match
-// the request host. Reads stay open (auth alone gates them).
-function csrfOk(req: Request, url: URL): boolean {
-  const origin = req.headers.get("origin");
-  const referer = req.headers.get("referer");
-  const expected = `${url.protocol}//${url.host}`;
-  if (origin) return origin === expected;
-  if (referer) {
-    try {
-      const r = new URL(referer);
-      return `${r.protocol}//${r.host}` === expected;
-    } catch {
-      return false;
-    }
-  }
-  // No Origin and no Referer means no browser context. Reject to be safe.
-  return false;
-}
+// Public, no JWT required:
+//   /liveness, /readiness, /metrics  - kubelet probes + prometheus
+//   /config.json                     - bootstrap config the SPA needs to log in
+//   GET /api/export/netex            - consumed by the photon importer
+// Everything else under /api/* requires a valid Auth0 access token.
 
 function jsonError(status: number, message: string): Response {
   return new Response(JSON.stringify({ error: message }), {
@@ -104,13 +102,22 @@ async function handle(req: Request, url: URL): Promise<Response> {
   if (pathname === "/liveness") return liveness();
   if (pathname === "/readiness") return readiness();
   if (pathname === "/metrics") return metrics();
+  if (pathname === "/config.json") return config();
 
-  if (WRITE_METHODS.has(method) && !csrfOk(req, url)) {
-    return jsonError(403, "cross-origin write rejected");
+  // Public read of the live NeTEx feed (replaces the static
+  // events_norway_poi.xml in geocoder-data).
+  if (pathname === "/api/export/netex" && method === "GET") {
+    return exportNetex();
   }
 
-  if (pathname === "/api/me" && method === "GET") return me(req);
-  if (pathname === "/api/export/netex" && method === "GET") return exportNetex();
+  // Everything else under /api/* requires a valid token. authenticate()
+  // memoises per-Request, so route handlers can call emailFor(req)
+  // without re-running jwtVerify.
+  if (pathname.startsWith("/api/")) {
+    const auth = await authenticate(req);
+    if (!auth.ok) return jsonError(auth.status, auth.error);
+  }
+
   if (pathname === "/api/import/netex" && method === "POST") {
     const len = Number(req.headers.get("content-length"));
     if (Number.isFinite(len) && len > MAX_IMPORT_BYTES) {

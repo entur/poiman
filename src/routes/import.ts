@@ -1,5 +1,5 @@
 import { sql } from "../db.ts";
-import { userEmail } from "../auth.ts";
+import { emailFor } from "../auth.ts";
 import { parseNetex } from "../netex/parse.ts";
 import { POI_TYPES, isPoiType } from "../poiTypes.ts";
 
@@ -35,7 +35,7 @@ export async function importNetex(req: Request): Promise<Response> {
     );
   }
 
-  const user = userEmail(req);
+  const user = emailFor(req);
 
   const result = await sql.begin(async (tx) => {
     let replaced = 0;

@@ -1,3 +1,5 @@
+import { signal } from "@preact/signals";
+
 export type Poi = {
   id: number;
   name: string;
@@ -22,8 +24,29 @@ export type PoiInput = {
   valid_to: string;
 };
 
+// Set by the AuthProvider wrapper on every user/token change. Plain api.ts
+// callers don't have access to React hooks, so we mirror the live token in
+// a module-level signal and pin it onto every outgoing /api/* request.
+// Invariant: AuthenticatedApp returns null until auth.user is set, so by
+// the time any code in the app calls into api.*, accessToken.value is set
+// (or the app is in dev-bypass mode where no token is needed).
+export const accessToken = signal<string | null>(null);
+
+// Set by main.tsx after AuthProvider is mounted. The api fires this on
+// 401 so the app can re-authenticate instead of leaving the user stuck
+// on a stale-token error banner.
+export const onUnauthorized = signal<(() => void) | null>(null);
+
+function authHeaders(extra?: HeadersInit): HeadersInit {
+  const h: Record<string, string> = {};
+  if (extra) Object.assign(h, extra);
+  if (accessToken.value) h["Authorization"] = `Bearer ${accessToken.value}`;
+  return h;
+}
+
 async function check(res: Response): Promise<Response> {
   if (!res.ok) {
+    if (res.status === 401) onUnauthorized.value?.();
     let msg = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
@@ -35,18 +58,17 @@ async function check(res: Response): Promise<Response> {
 }
 
 export const api = {
-  async me(): Promise<{ email: string | null }> {
-    return (await check(await fetch("/api/me"))).json();
-  },
   async list(): Promise<Poi[]> {
-    return (await check(await fetch("/api/pois"))).json();
+    return (
+      await check(await fetch("/api/pois", { headers: authHeaders() }))
+    ).json();
   },
   async create(input: PoiInput): Promise<Poi> {
     return (
       await check(
         await fetch("/api/pois", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(input),
         }),
       )
@@ -57,14 +79,19 @@ export const api = {
       await check(
         await fetch(`/api/pois/${id}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify(input),
         }),
       )
     ).json();
   },
   async remove(id: number): Promise<void> {
-    await check(await fetch(`/api/pois/${id}`, { method: "DELETE" }));
+    await check(
+      await fetch(`/api/pois/${id}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      }),
+    );
   },
   async importNetex(
     xml: string,
@@ -74,7 +101,7 @@ export const api = {
       await check(
         await fetch(`/api/import/netex?mode=${mode}`, {
           method: "POST",
-          headers: { "Content-Type": "application/xml" },
+          headers: authHeaders({ "Content-Type": "application/xml" }),
           body: xml,
         }),
       )

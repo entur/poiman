@@ -3,3 +3,8 @@ common:
   ingress:
     host: poiman.staging.entur.io
     trafficType: api
+  configmap:
+    data:
+      OIDC_AUTHORITY: https://partner.staging.entur.org
+      OIDC_CLIENT_ID: ""
+      OIDC_AUDIENCE: https://api.staging.entur.io

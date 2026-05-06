@@ -1,5 +1,5 @@
 import { sql, type Poi, type PoiInput } from "../db.ts";
-import { userEmail } from "../auth.ts";
+import { emailFor } from "../auth.ts";
 import { POI_TYPES, isPoiType } from "../poiTypes.ts";
 
 // bigserial comes back from Bun.sql as a string to preserve precision;
@@ -87,7 +87,7 @@ export async function createPoi(req: Request): Promise<Response> {
   const body = await req.json().catch(() => null);
   const parsed = parseInput(body);
   if (typeof parsed === "string") return err(400, parsed);
-  const user = userEmail(req);
+  const user = emailFor(req);
   const rows = (await sql`
     insert into pois (name, poi_type, longitude, latitude, valid_from, valid_to,
                       created_by, last_edited_by)
@@ -105,7 +105,7 @@ export async function updatePoi(id: number, req: Request): Promise<Response> {
   const body = await req.json().catch(() => null);
   const parsed = parseInput(body);
   if (typeof parsed === "string") return err(400, parsed);
-  const user = userEmail(req);
+  const user = emailFor(req);
   const rows = (await sql`
     update pois set
       name           = ${parsed.name},

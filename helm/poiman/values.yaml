@@ -55,3 +55,13 @@ common:
           command: ["/bin/sh", "-c", "sleep 5"]
   postgres:
     enabled: true
+  configmap:
+    enabled: true
+    toEnv: true
+    data:
+      # Auth0 / OIDC bootstrap. All three values are public; they're also
+      # echoed to the browser via /config.json so the SPA can log in.
+      # Set the env-specific values in values-kub-ent-{dev,tst,prd}.yaml.
+      OIDC_AUTHORITY: ""
+      OIDC_CLIENT_ID: ""
+      OIDC_AUDIENCE: ""

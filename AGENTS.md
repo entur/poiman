@@ -8,6 +8,10 @@
 - Frontend: Preact + `@preact/signals`. No bundler config beyond the
   `bun build` invocation in `package.json`. No React, no Vite, no JSX
   pragma comments - `tsconfig.json` sets `jsxImportSource: "preact"`.
+  `react-oidc-context` is the one exception that needs a "react" import:
+  the `alias` map in `package.json` and `paths` in `tsconfig.json`
+  redirect `react`/`react-dom` to `preact/compat`. Don't add other libs
+  that need real React.
 - Styling: a single `style.css` imported from `main.tsx`. No CSS-in-JS,
   no Tailwind.
 
@@ -19,11 +23,10 @@ photon import pipeline.
 
 Rules:
 
-- The serializer has a golden test against
-  `geocoder-data/events_norway_poi.xml`. Keep that test passing for the
-  first three POIs byte-for-byte. If the upstream consumer changes its
-  schema expectations, update the golden file and the serializer in the
-  same change.
+- The serializer has a byte-for-byte golden test against
+  `src/netex/__fixtures__/three_pois.xml`. The fixture is shared with the
+  parser test. If the upstream consumer changes its schema expectations,
+  update the fixture and the serializer in the same change.
 - All datetimes in the XML are wall-clock Europe/Oslo, no offset, no
   millis (e.g. `2026-03-01T00:00:00`). `formatOsloIso` is the only place
   that should format them.
@@ -43,10 +46,29 @@ Rules:
 
 ## Auth
 
-poiman never sees an unauthenticated request in cluster - SSO/IAP is
-configured at the ingress. Do not add app-side auth, login pages, or
-session middleware. If a route needs to be public (e.g. for the photon
-importer), add it to the ingress allowlist, not to the app.
+poiman uses Auth0 SPA login (Authorization Code + PKCE) via Entur's
+partner front-door (`https://partner.<env>.entur.org`). The SPA gets an
+access token; the backend verifies it against Auth0's JWKS using `jose`
+in `src/auth.ts`.
+
+- Frontend: `react-oidc-context`'s `<AuthProvider>` wraps the App in
+  `src/web/main.tsx`. `redirect_uri` is `window.location.origin` (no
+  `/callback` path). Per-env SPA `client_id` is provisioned by team
+  sikkerhet and injected via the `OIDC_CLIENT_ID` env var.
+- Backend: `authenticate(req)` is called once in `src/server.ts` for
+  every `/api/*` path except `GET /api/export/netex` (consumed by the
+  photon importer). Result is memoised per `Request` via a `WeakMap`;
+  routes call `emailFor(req)` to read the email without re-verifying.
+- Public routes: `/liveness`, `/readiness`, `/metrics`, `/config.json`,
+  and `GET /api/export/netex`. Adding a new public path requires touching
+  the gate in `server.ts` deliberately.
+- Local dev: `POIMAN_DEV=1` + missing `OIDC_AUTHORITY` gives a bypass
+  that stamps `dev@local`. The boot guard refuses to start with
+  `POIMAN_DEV=1` unless `NODE_ENV=development`. In any non-dev env the
+  three `OIDC_*` vars must all be set or boot fails.
+- Token expiry: stale-token 401s trigger `signinRedirect()` (see
+  `onUnauthorized` in `src/web/api.ts`), so the user is re-authenticated
+  rather than left on a stuck error banner.
 
 ## Tests
 

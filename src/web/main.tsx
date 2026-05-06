@@ -1,6 +1,13 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal, computed, effect, batch } from "@preact/signals";
+import {
+  AuthProvider,
+  hasAuthParams,
+  useAuth,
+} from "react-oidc-context";
+import type { UserManagerSettings } from "oidc-client-ts";
+import { accessToken, onUnauthorized } from "./api.ts";
 import { POI_TYPES, type PoiType } from "../poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
@@ -71,14 +78,6 @@ function flashNotice(msg: string): void {
   setTimeout(() => {
     if (notice.value === msg) notice.value = null;
   }, 4000);
-}
-
-async function loadMe(): Promise<void> {
-  try {
-    currentUser.value = (await api.me()).email;
-  } catch {
-    currentUser.value = null;
-  }
 }
 
 function showError(e: unknown): void {
@@ -918,7 +917,6 @@ function DeleteDialog() {
 function App() {
   useEffect(() => {
     refresh();
-    loadMe();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (pendingDelete.value) pendingDelete.value = null;
@@ -939,5 +937,85 @@ function App() {
   );
 }
 
-const root = document.getElementById("root");
-if (root) render(<App />, root);
+// ---------- bootstrap ----------
+
+// Wrapper around <App /> that triggers an Auth0 login redirect when the
+// user isn't authenticated yet. Mirrors the canonical pattern from
+// entur/nirgali/src/index.tsx.
+function AuthenticatedApp() {
+  const auth = useAuth();
+  useEffect(() => {
+    if (
+      !hasAuthParams() &&
+      !auth.isAuthenticated &&
+      !auth.activeNavigator &&
+      !auth.isLoading
+    ) {
+      auth.signinRedirect().catch((err: unknown) => {
+        console.error("signinRedirect failed", err);
+      });
+    }
+  }, [auth.isAuthenticated, auth.activeNavigator, auth.isLoading]);
+
+  // Mirror the live access token + user email into module-level signals so
+  // api.ts and the rest of the app can read them without hooks.
+  useEffect(() => {
+    accessToken.value = auth.user?.access_token ?? null;
+    currentUser.value = auth.user?.profile.email ?? null;
+  }, [auth.user]);
+
+  // Stale token -> 401 -> kick the user back through the OIDC flow rather
+  // than leaving them stuck on a stuck error banner. signinRedirect() with
+  // the existing session just refreshes the access token; if the SSO
+  // session is also gone, the user logs in again.
+  useEffect(() => {
+    onUnauthorized.value = () => {
+      auth.signinRedirect().catch((err: unknown) => {
+        console.error("re-auth failed", err);
+      });
+    };
+    return () => {
+      onUnauthorized.value = null;
+    };
+  }, [auth.signinRedirect]);
+
+  if (!auth.isAuthenticated) return null;
+  return <App />;
+}
+
+async function bootstrap(): Promise<void> {
+  const root = document.getElementById("root");
+  if (!root) return;
+
+  let oidcConfig: UserManagerSettings | null = null;
+  try {
+    const cfg = (await fetch("/config.json").then((r) => r.json())) as {
+      oidcConfig: UserManagerSettings | null;
+    };
+    oidcConfig = cfg.oidcConfig;
+  } catch (err) {
+    console.error("failed to load /config.json", err);
+  }
+
+  if (!oidcConfig) {
+    // Local dev with no Auth0 wired up: render the app directly. The
+    // backend's POIMAN_DEV bypass stamps edits with dev@local.
+    render(<App />, root);
+    return;
+  }
+
+  render(
+    <AuthProvider
+      {...oidcConfig}
+      onSigninCallback={() =>
+        history.replaceState({}, document.title, location.pathname)
+      }
+      redirect_uri={location.origin}
+    >
+      <AuthenticatedApp />
+    </AuthProvider>,
+    root,
+  );
+}
+
+bootstrap();
