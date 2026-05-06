@@ -1,0 +1,5 @@
+common:
+  env: prd
+  ingress:
+    host: poiman.entur.io
+    trafficType: api

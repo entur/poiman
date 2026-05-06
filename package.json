@@ -1,0 +1,28 @@
+{
+  "name": "poiman",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POI editor that produces NeTEx XML for the Norwegian event POI feed",
+  "type": "module",
+  "scripts": {
+    "dev": "POIMAN_DEV=1 bun --watch src/server.ts",
+    "build:web": "bun build src/web/main.tsx --outdir dist/web --target browser --minify --sourcemap",
+    "build": "bun run build:web",
+    "start": "bun src/server.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "import-existing": "bun scripts/import-existing.ts"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.19.0",
+    "preact": "^10.27.0",
+    "@preact/signals": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}

@@ -1,0 +1,5 @@
+common:
+  env: dev
+  ingress:
+    host: poiman.dev.entur.io
+    trafficType: api

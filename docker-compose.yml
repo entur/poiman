@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: poiman
+      POSTGRES_PASSWORD: poiman
+      POSTGRES_DB: poiman
+    ports:
+      - "5432:5432"
+    volumes:
+      - poiman-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poiman"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  poiman:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://poiman:poiman@postgres:5432/poiman
+      PORT: 8080
+      POIMAN_DEV: "1"
+    ports:
+      - "8080:8080"
+    # Bind-mount the source so `bun --watch` and `bun build --watch`
+    # pick up local edits. The image's baked-in /app/node_modules is
+    # untouched.
+    volumes:
+      - ./src:/app/src
+      - ./dist:/app/dist
+      - ./scripts:/app/scripts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./package.json:/app/package.json
+    command:
+      - sh
+      - -c
+      - |
+        bun build src/web/main.tsx --outdir dist/web --target browser --sourcemap --watch &
+        exec bun --watch src/server.ts
+
+volumes:
+  poiman-pg:
