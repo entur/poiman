@@ -55,5 +55,3 @@ common:
           command: ["/bin/sh", "-c", "sleep 5"]
   postgres:
     enabled: true
-  secrets:
-    app-secrets: []
