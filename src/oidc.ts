@@ -12,3 +12,17 @@ export const audience = process.env.OIDC_AUDIENCE ?? "";
 
 export const configured =
   authority !== "" && clientId !== "" && audience !== "";
+
+// DISABLE_AUTH=true bypasses Auth0 entirely. Lower-cased to tolerate
+// whatever YAML-to-env coercion the Helm chart picks (`true`/`True`).
+// The boot guard in server.ts refuses to start when this is set in a
+// non-development environment.
+export const authDisabled =
+  (process.env.DISABLE_AUTH ?? "").toLowerCase() === "true";
+
+export const devMode = process.env.NODE_ENV === "development";
+
+// Bypass user shown for last_edited_by while DISABLE_AUTH is on.
+// Using `||` rather than `??` so an empty-string env (which the chart
+// ships as a default) still falls back to the literal default.
+export const devUser = process.env.DEV_USER || "dev@local";

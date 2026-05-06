@@ -62,10 +62,11 @@ in `src/auth.ts`.
 - Public routes: `/liveness`, `/readiness`, `/metrics`, `/config.json`,
   and `GET /api/export/netex`. Adding a new public path requires touching
   the gate in `server.ts` deliberately.
-- Local dev: `POIMAN_DEV=1` + missing `OIDC_AUTHORITY` gives a bypass
-  that stamps `dev@local`. The boot guard refuses to start with
-  `POIMAN_DEV=1` unless `NODE_ENV=development`. In any non-dev env the
-  three `OIDC_*` vars must all be set or boot fails.
+- Local dev: `DISABLE_AUTH=true` bypasses auth entirely; the backend
+  stamps `dev@local` (or `DEV_USER` if set) and the SPA skips
+  `AuthProvider`. The server logs a loud `WARNING` at startup. When
+  `DISABLE_AUTH` is not `true`, the three `OIDC_*` vars must all be set
+  or boot fails.
 - Token expiry: stale-token 401s trigger `signinRedirect()` (see
   `onUnauthorized` in `src/web/api.ts`), so the user is re-authenticated
   rather than left on a stuck error banner.

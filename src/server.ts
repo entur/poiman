@@ -12,35 +12,33 @@ import { exportNetex } from "./routes/export.ts";
 import { importNetex } from "./routes/import.ts";
 import { config } from "./routes/config.ts";
 import { authenticate } from "./auth.ts";
-import { configured as oidcConfigured } from "./oidc.ts";
+import { configured as oidcConfigured, authDisabled, devMode } from "./oidc.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ROOT = import.meta.dir;
 const WEB_DIST = join(ROOT, "..", "dist", "web");
 const WEB_SRC = join(ROOT, "web");
-const DEV = process.env.POIMAN_DEV === "1";
 
-// Refuse to boot if the dev fallback is enabled outside an explicit
-// development env. Without this guard, the dev short-circuit in auth.ts
-// would silently stamp every edit as the dev fallback user. The
-// docker-compose.yml dev workflow sets NODE_ENV=development; the prd
-// Helm chart sets NODE_ENV=production via the Dockerfile.
-if (DEV && process.env.NODE_ENV !== "development") {
-  console.error(
-    "FATAL: POIMAN_DEV=1 requires NODE_ENV=development. " +
-      "Without an explicit development env, the dev fallback user could " +
-      "ship to a real environment. Refusing to start.",
+// Loud warning so anyone tailing logs sees the bypass. The setting is
+// already explicit (DISABLE_AUTH=true is unambiguous in a values file);
+// no need for a secondary boot guard that forces NODE_ENV=development
+// in real environments.
+if (authDisabled) {
+  console.warn(
+    "WARNING: DISABLE_AUTH=true. All requests are stamped as the dev " +
+      "user; no JWT verification is performed. Do not set this in tst/prd.",
   );
-  process.exit(1);
 }
 
-// Refuse to boot in non-dev mode if OIDC isn't configured. Otherwise the
-// SPA loads (with /config.json returning oidcConfig:null) and the API
-// runs unauthenticated. Loud failure is better than silent insecurity.
-if (!DEV && !oidcConfigured) {
+// Refuse to boot when auth is required but OIDC isn't configured.
+// Otherwise the SPA loads (with /config.json returning oidcConfig:null)
+// and the API runs unauthenticated. Loud failure is better than silent
+// insecurity.
+if (!authDisabled && !oidcConfigured) {
   console.error(
     "FATAL: OIDC_AUTHORITY/OIDC_CLIENT_ID/OIDC_AUDIENCE must all be set " +
-      "in non-dev environments. Set POIMAN_DEV=1 only for local development.",
+      "when DISABLE_AUTH is not true. Set DISABLE_AUTH=true only for " +
+      "local development.",
   );
   process.exit(1);
 }
@@ -95,6 +93,21 @@ function jsonError(status: number, message: string): Response {
   });
 }
 
+// Methods that mutate state; must carry a content-type that the browser
+// won't send on a CORS-simple form POST. Without this check, while
+// DISABLE_AUTH is on, a third-party page could submit a `<form
+// enctype="text/plain">` with a JSON-shaped body and our `req.json()`
+// would happily parse it. JSON / XML triggers preflight, which is what
+// we want.
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const ALLOWED_WRITE_TYPES = ["application/json", "application/xml"];
+
+function contentTypeOk(req: Request): boolean {
+  if (req.method === "DELETE") return true; // empty body is fine
+  const ct = (req.headers.get("content-type") ?? "").toLowerCase();
+  return ALLOWED_WRITE_TYPES.some((t) => ct.startsWith(t));
+}
+
 async function handle(req: Request, url: URL): Promise<Response> {
   const { pathname } = url;
   const method = req.method;
@@ -108,6 +121,16 @@ async function handle(req: Request, url: URL): Promise<Response> {
   // events_norway_poi.xml in geocoder-data).
   if (pathname === "/api/export/netex" && method === "GET") {
     return exportNetex();
+  }
+
+  // Reject writes with a CORS-simple Content-Type. Doubles as CSRF
+  // protection while DISABLE_AUTH is on (no Bearer header to gate on).
+  if (
+    pathname.startsWith("/api/") &&
+    WRITE_METHODS.has(method) &&
+    !contentTypeOk(req)
+  ) {
+    return jsonError(415, "Content-Type must be application/json or application/xml");
   }
 
   // Everything else under /api/* requires a valid token. authenticate()
@@ -155,7 +178,7 @@ async function serveStatic(pathname: string): Promise<Response> {
   const file = Bun.file(candidate);
   if (await file.exists()) {
     const headers: Record<string, string> = {};
-    if (DEV) headers["Cache-Control"] = "no-cache, must-revalidate";
+    if (devMode) headers["Cache-Control"] = "no-cache, must-revalidate";
     return new Response(file, { headers });
   }
   return new Response("not found", { status: 404 });
@@ -192,4 +215,7 @@ const server = Bun.serve({
   },
 });
 
-console.log(`poiman listening on http://${server.hostname}:${server.port}${DEV ? " (dev)" : ""}`);
+console.log(
+  `poiman listening on http://${server.hostname}:${server.port}` +
+    `${authDisabled ? " (auth disabled)" : ""}${devMode && !authDisabled ? " (dev)" : ""}`,
+);

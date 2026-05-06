@@ -2,9 +2,12 @@ common:
   env: dev
   ingress:
     host: poiman.dev.entur.io
-    trafficType: api
+    trafficType: public
   configmap:
     data:
       OIDC_AUTHORITY: https://partner.dev.entur.org
       OIDC_CLIENT_ID: "" # set after team sikkerhet provisions the SPA client
       OIDC_AUDIENCE: https://api.dev.entur.io
+      # TEMPORARY: bypass auth on the cluster dev env until team sikkerhet
+      # delivers the SPA client_id. Remove once OIDC_CLIENT_ID is filled in.
+      DISABLE_AUTH: "true"

@@ -35,18 +35,17 @@ open http://localhost:8080
 `bun --watch src/server.ts` for the server and `bun build --watch` for
 the bundle. Edits on the host trigger reloads in the container.
 
-The compose env sets `POIMAN_DEV=1` and `NODE_ENV=development`. With
-those plus the `OIDC_*` vars unset, the backend bypasses JWT validation
-and stamps every edit as `dev@local`; the SPA renders without an
-`AuthProvider`. Override the dev email with `POIMAN_DEV_USER=...`.
+The compose env sets `DISABLE_AUTH=true` and `NODE_ENV=development`. In
+that mode auth is bypassed entirely: the backend stamps every edit as
+`dev@local`, and the SPA skips `AuthProvider`. This holds regardless
+of whether `OIDC_*` is set, so you can leave the prd values in place
+and just flip `DISABLE_AUTH` on. Override the dev email with
+`DEV_USER=alice@example.com`. The server logs a loud `WARNING` at
+startup whenever `DISABLE_AUTH=true`.
 
-The server refuses to start in two cases:
-
-- `POIMAN_DEV=1` without `NODE_ENV=development` (catches `POIMAN_DEV` in
-  a real environment).
-- `POIMAN_DEV=0` (or unset) with any of `OIDC_AUTHORITY` / `OIDC_CLIENT_ID`
-  / `OIDC_AUDIENCE` missing (catches a half-configured prd deploy that
-  would otherwise silently disable auth).
+The server refuses to start when `DISABLE_AUTH` is not `true` and any of
+`OIDC_AUTHORITY` / `OIDC_CLIENT_ID` / `OIDC_AUDIENCE` is missing (catches
+a half-configured prd deploy that would otherwise silently disable auth).
 
 ## Tests
 

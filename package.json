@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "preinstall": "[ \"${npm_config_user_agent%%/*}\" = bun ] || { echo 'poiman uses Bun-specific features (alias map, bun:test). Run `bun install`.'; exit 1; }",
-    "dev": "POIMAN_DEV=1 NODE_ENV=development bun --watch src/server.ts",
+    "dev": "DISABLE_AUTH=true NODE_ENV=development bun --watch src/server.ts",
     "build:web": "bun build src/web/main.tsx --outdir dist/web --target browser --minify --sourcemap",
     "build": "bun run build:web",
     "start": "bun src/server.ts",

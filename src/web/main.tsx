@@ -999,7 +999,7 @@ async function bootstrap(): Promise<void> {
 
   if (!oidcConfig) {
     // Local dev with no Auth0 wired up: render the app directly. The
-    // backend's POIMAN_DEV bypass stamps edits with dev@local.
+    // backend's DISABLE_AUTH bypass stamps edits with dev@local.
     render(<App />, root);
     return;
   }

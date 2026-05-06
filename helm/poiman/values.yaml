@@ -65,3 +65,8 @@ common:
       OIDC_AUTHORITY: ""
       OIDC_CLIENT_ID: ""
       OIDC_AUDIENCE: ""
+      # Set to "true" to skip Auth0 entirely - all requests are stamped
+      # as `dev@local` (override via the `DEV_USER` env var). Local dev
+      # sets this in docker-compose.yml; the server logs a loud WARNING
+      # whenever it boots with auth disabled.
+      DISABLE_AUTH: "false"

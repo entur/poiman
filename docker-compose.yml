@@ -23,9 +23,9 @@ services:
     environment:
       DATABASE_URL: postgres://poiman:poiman@postgres:5432/poiman
       PORT: 8080
-      POIMAN_DEV: "1"
-      # Override the image's NODE_ENV=production so the prd guard against
-      # POIMAN_DEV=1 doesn't fire in local dev.
+      DISABLE_AUTH: "true"
+      # Override the image's NODE_ENV=production so the boot guard
+      # against DISABLE_AUTH=true doesn't fire in local dev.
       NODE_ENV: development
     ports:
       - "8080:8080"

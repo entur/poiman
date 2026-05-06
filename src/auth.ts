@@ -1,8 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
-import { authority, audience, configured } from "./oidc.ts";
-
-const DEV = process.env.POIMAN_DEV === "1";
-const DEV_USER = process.env.POIMAN_DEV_USER ?? "dev@local";
+import { authority, audience, configured, authDisabled, devUser } from "./oidc.ts";
 
 // Pin the algorithm. JOSE only enforces an allowlist when one is provided;
 // without this the verifier relies on JWKS resolver behavior to reject
@@ -48,8 +45,12 @@ export async function authenticate(req: Request): Promise<AuthResult> {
 }
 
 async function verify(req: Request): Promise<AuthResult> {
-  if (DEV && !configured) {
-    return { ok: true, email: DEV_USER, claims: { sub: DEV_USER } };
+  // DISABLE_AUTH=true disables auth entirely and stamps every request as
+  // DEV_USER. The boot guard in server.ts refuses to start with
+  // DISABLE_AUTH=true outside NODE_ENV=development, so this can't ship
+  // accidentally.
+  if (authDisabled) {
+    return { ok: true, email: devUser, claims: { sub: devUser } };
   }
   if (!jwks) {
     return { ok: false, status: 500, error: "auth not configured" };
