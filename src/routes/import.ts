@@ -1,8 +1,7 @@
 import { sql } from "../db.ts";
 import { userEmail } from "../auth.ts";
 import { parseNetex } from "../netex/parse.ts";
-
-const ALLOWED_TYPES = new Set(["concert", "festival", "event"]);
+import { POI_TYPES, isPoiType } from "../poiTypes.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -11,21 +10,26 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+const MAX_IMPORT_CHARS = 10 * 1024 * 1024;
+
 export async function importNetex(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const mode = url.searchParams.get("mode") === "replace" ? "replace" : "merge";
   const xml = await req.text();
+  if (xml.length > MAX_IMPORT_CHARS) {
+    return json({ error: "payload too large" }, 413);
+  }
   if (!xml.trim()) return json({ error: "empty body" }, 400);
 
   const parsed = parseNetex(xml);
   if (parsed.length === 0) {
     return json({ error: "no POIs found in XML" }, 400);
   }
-  const bad = parsed.find((p) => !ALLOWED_TYPES.has(p.poi_type));
+  const bad = parsed.find((p) => !isPoiType(p.poi_type));
   if (bad) {
     return json(
       {
-        error: `unknown poi_type "${bad.poi_type}"; allowed: ${[...ALLOWED_TYPES].join(", ")}`,
+        error: `unknown poi_type "${bad.poi_type}"; allowed: ${POI_TYPES.join(", ")}`,
       },
       400,
     );

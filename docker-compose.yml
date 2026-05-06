@@ -24,6 +24,9 @@ services:
       DATABASE_URL: postgres://poiman:poiman@postgres:5432/poiman
       PORT: 8080
       POIMAN_DEV: "1"
+      # Override the image's NODE_ENV=production so the prd guard against
+      # POIMAN_DEV=1 doesn't fire in local dev.
+      NODE_ENV: development
     ports:
       - "8080:8080"
     # Bind-mount the source so `bun --watch` and `bun build --watch`

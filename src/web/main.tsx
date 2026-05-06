@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal, computed, effect, batch } from "@preact/signals";
+import { POI_TYPES, type PoiType } from "../poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
   type GeoJSONSource,
@@ -12,15 +13,22 @@ import "./style.css";
 // ---------- state ----------
 
 const pois = signal<Poi[]>([]);
+const loading = signal(true);
 const filterText = signal("");
-const filterType = signal<"all" | "concert" | "festival" | "event">("all");
+const filterType = signal<"all" | PoiType>("all");
 const filterTime = signal<"all" | "current" | "future" | "outdated">("all");
 const selectedId = signal<number | null>(null);
 const pinning = signal(false);
 const errMsg = signal<string | null>(null);
+const notice = signal<string | null>(null);
 const pendingImport = signal<{ name: string; xml: string } | null>(null);
+const pendingDelete = signal<Poi | null>(null);
 const importing = signal(false);
 const currentUser = signal<string | null>(null);
+// Bumped by finishDrag after a successful PUT, so the open form (if any)
+// can pick up the new lon/lat without overwriting in-flight keystrokes
+// from unrelated refreshes.
+const lastDragCommit = signal<{ id: number; lng: number; lat: number; ts: number } | null>(null);
 
 const visiblePois = computed(() => {
   const q = filterText.value.toLowerCase().trim();
@@ -53,7 +61,16 @@ async function refresh(): Promise<void> {
     errMsg.value = null;
   } catch (e) {
     errMsg.value = `Failed to load POIs: ${(e as Error).message}`;
+  } finally {
+    loading.value = false;
   }
+}
+
+function flashNotice(msg: string): void {
+  notice.value = msg;
+  setTimeout(() => {
+    if (notice.value === msg) notice.value = null;
+  }, 4000);
 }
 
 async function loadMe(): Promise<void> {
@@ -73,18 +90,21 @@ function showError(e: unknown): void {
 
 // ---------- helpers ----------
 
-function tooltipHtml(p: Poi): string {
-  return (
-    `<strong>${escape(p.name)}</strong>` +
-    `<br/><small>${p.poi_type} - ${p.valid_from.slice(0, 10)} -> ${p.valid_to.slice(0, 10)}</small>`
-  );
-}
-
-function escape(s: string): string {
+function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function tooltipHtml(p: Poi): string {
+  const name = escapeHtml(p.name);
+  const type = escapeHtml(p.poi_type);
+  const from = escapeHtml(p.valid_from.slice(0, 10));
+  const to = escapeHtml(p.valid_to.slice(0, 10));
+  return `<strong>${name}</strong><br/><small>${type} - ${from} -> ${to}</small>`;
 }
 
 function toDateInput(iso: string | null | undefined): string {
@@ -97,8 +117,9 @@ function toDateInput(iso: string | null | undefined): string {
 
 // Combine YYYY-MM-DD with a fixed wall-clock time and return an ISO string.
 // Browser-local time is used for the conversion to UTC, which matches Oslo
-// time for the typical user.
-function fromDateInput(s: string, time: "00:00" | "23:59"): string {
+// time for the typical user. ToDate uses 23:59:59 so the converter's strict
+// `now <= ToDate` check covers the entire last day.
+function fromDateInput(s: string, time: "00:00:00" | "23:59:59"): string {
   if (!s) return "";
   return new Date(`${s}T${time}`).toISOString();
 }
@@ -183,6 +204,7 @@ function MapView() {
   const mapRef = useRef<MlMap | null>(null);
   const styleLoaded = useRef(false);
   const dragRef = useRef<DragOverride | null>(null);
+  const initialFitDone = useRef(false);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -269,9 +291,20 @@ function MapView() {
           "circle-stroke-color": "#111827",
         },
       });
+      // Once data lands, fit the camera to all POIs (one-time, only if
+      // we've been showing the default view).
+      const fitOnce = effect(() => {
+        const list = pois.value;
+        if (list.length === 0 || initialFitDone.current) return;
+        initialFitDone.current = true;
+        const b = new maplibregl.LngLatBounds();
+        for (const p of list) b.extend([p.longitude, p.latitude]);
+        map.fitBounds(b, { padding: 40, maxZoom: 12, duration: 0 });
+        fitOnce();
+      });
     });
 
-    // Hover tooltip + cursor
+    // Hover tooltip + cursor (grab to telegraph drag-to-move).
     map.on(
       "mousemove",
       "pois-fill",
@@ -279,7 +312,7 @@ function MapView() {
         if (pinning.value || dragRef.current) return;
         const f = e.features?.[0];
         if (!f) return;
-        map.getCanvas().style.cursor = "pointer";
+        map.getCanvas().style.cursor = "grab";
         tooltip
           .setLngLat(e.lngLat)
           .setHTML(tooltipHtml(f.properties as Poi))
@@ -356,6 +389,12 @@ function MapView() {
         pois.value = pois.value.map((p) =>
           p.id === drag.id ? updated : p,
         );
+        lastDragCommit.value = {
+          id: drag.id,
+          lng: updated.longitude,
+          lat: updated.latitude,
+          ts: Date.now(),
+        };
       } catch (err) {
         showError(err);
         await refresh();
@@ -404,6 +443,7 @@ function MapView() {
         <div class="pinning">Click map to place new POI (esc to cancel)</div>
       )}
       {errMsg.value && <div class="banner-error">{errMsg.value}</div>}
+      {notice.value && <div class="banner-notice">{notice.value}</div>}
     </main>
   );
 }
@@ -412,7 +452,7 @@ async function createAt(lon: number, lat: number): Promise<void> {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const end = new Date(start.getTime() + 30 * 24 * 3600 * 1000);
-  end.setHours(23, 59, 0, 0);
+  end.setHours(23, 59, 59, 0);
   try {
     const created = await api.create({
       name: "New POI",
@@ -477,23 +517,18 @@ function Header() {
 
 function List() {
   const rows = visiblePois.value;
-  const removePoi = async (p: Poi) => {
-    if (!confirm(`Delete "${p.name}"?`)) return;
-    try {
-      await api.remove(p.id);
-      batch(() => {
-        pois.value = pois.value.filter((x) => x.id !== p.id);
-        if (selectedId.value === p.id) selectedId.value = null;
-      });
-    } catch (e) {
-      showError(e);
-    }
-  };
+  const isLoading = loading.value;
+  const total = pois.value.length;
+
+  let emptyText: string | null = null;
+  if (isLoading) emptyText = "Loading...";
+  else if (total === 0) emptyText = "No POIs yet. Use \"+ Add POI\" or import a NeTEx file.";
+  else if (rows.length === 0) emptyText = "No POIs match the current filters.";
 
   return (
     <div class="list">
-      {rows.length === 0 && (
-        <div style="padding:12px;color:#9ca3af">No POIs match.</div>
+      {emptyText && (
+        <div style="padding:12px;color:#9ca3af">{emptyText}</div>
       )}
       {rows.map((p) => (
         <div
@@ -528,7 +563,9 @@ function List() {
                 class="row-btn danger"
                 title="Delete"
                 aria-label="Delete"
-                onClick={() => removePoi(p)}
+                onClick={() => {
+                  pendingDelete.value = p;
+                }}
               >
                 <TrashIcon />
               </button>
@@ -574,21 +611,17 @@ function Form() {
     setDraft(sel ? draftFrom(sel) : null);
   }, [sel?.id]);
 
-  // Drag-to-move on the map mutates the row in pois.value. Sync the new
-  // coordinates into the draft so a subsequent Save doesn't overwrite the
-  // dragged position with the form's stale lon/lat.
+  // Drag-to-move on the map commits via PUT and bumps lastDragCommit. Pull
+  // those new coordinates into the draft (only when the dragged POI is the
+  // one currently being edited). A bare `pois.value` refresh that happens
+  // for unrelated reasons no longer overwrites in-flight lon/lat keystrokes.
+  const drag = lastDragCommit.value;
   useEffect(() => {
-    if (!sel) return;
+    if (!drag || !sel || drag.id !== sel.id) return;
     setDraft((d) =>
-      d
-        ? {
-            ...d,
-            longitude: round5(sel.longitude),
-            latitude: round5(sel.latitude),
-          }
-        : d,
+      d ? { ...d, longitude: round5(drag.lng), latitude: round5(drag.lat) } : d,
     );
-  }, [sel?.longitude, sel?.latitude]);
+  }, [drag?.ts]);
 
   if (!sel || !draft) {
     return (
@@ -612,8 +645,8 @@ function Form() {
         poi_type: draft.poi_type,
         longitude: Number(draft.longitude),
         latitude: Number(draft.latitude),
-        valid_from: fromDateInput(draft.valid_from, "00:00"),
-        valid_to: fromDateInput(draft.valid_to, "23:59"),
+        valid_from: fromDateInput(draft.valid_from, "00:00:00"),
+        valid_to: fromDateInput(draft.valid_to, "23:59:59"),
       });
       pois.value = pois.value.map((p) => (p.id === sel.id ? updated : p));
     } catch (e) {
@@ -621,17 +654,8 @@ function Form() {
     }
   };
 
-  const remove = async () => {
-    if (!confirm(`Delete "${sel.name}"?`)) return;
-    try {
-      await api.remove(sel.id);
-      batch(() => {
-        pois.value = pois.value.filter((p) => p.id !== sel.id);
-        selectedId.value = null;
-      });
-    } catch (e) {
-      showError(e);
-    }
+  const remove = () => {
+    pendingDelete.value = sel;
   };
 
   return (
@@ -781,10 +805,7 @@ function ImportDialog() {
       const result = await api.importNetex(job.xml, mode);
       await refresh();
       const extra = result.replaced ? `, replaced ${result.replaced}` : "";
-      errMsg.value = `Imported ${result.imported} POIs (${mode}${extra}).`;
-      setTimeout(() => {
-        if (errMsg.value?.startsWith("Imported ")) errMsg.value = null;
-      }, 4000);
+      flashNotice(`Imported ${result.imported} POIs (${mode}${extra}).`);
       pendingImport.value = null;
     } catch (err) {
       showError(err);
@@ -853,18 +874,56 @@ function ImportDialog() {
   );
 }
 
+function DeleteDialog() {
+  const target = pendingDelete.value;
+  if (!target) return null;
+  const cancel = () => {
+    pendingDelete.value = null;
+  };
+  const confirm = async () => {
+    try {
+      await api.remove(target.id);
+      batch(() => {
+        pois.value = pois.value.filter((x) => x.id !== target.id);
+        if (selectedId.value === target.id) selectedId.value = null;
+        pendingDelete.value = null;
+      });
+    } catch (e) {
+      showError(e);
+      pendingDelete.value = null;
+    }
+  };
+  return (
+    <div class="modal-backdrop" onClick={cancel}>
+      <div class="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Delete POI</h2>
+        <p>
+          Soft-delete <strong>{target.name}</strong>? It will disappear from
+          the map and from the NeTEx export. The row stays in the database
+          and can be restored manually if needed.
+        </p>
+        <div class="modal-actions">
+          <button class="ghost" onClick={cancel}>
+            Cancel
+          </button>
+          <button class="danger" onClick={confirm}>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   useEffect(() => {
     refresh();
     loadMe();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (pendingImport.value && !importing.value) {
-          pendingImport.value = null;
-        } else {
-          pinning.value = false;
-        }
-      }
+      if (e.key !== "Escape") return;
+      if (pendingDelete.value) pendingDelete.value = null;
+      else if (pendingImport.value && !importing.value) pendingImport.value = null;
+      else pinning.value = false;
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -875,6 +934,7 @@ function App() {
       <Sidebar />
       <MapView />
       <ImportDialog />
+      <DeleteDialog />
     </div>
   );
 }

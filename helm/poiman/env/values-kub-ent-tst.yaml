@@ -2,4 +2,4 @@ common:
   env: tst
   ingress:
     host: poiman.staging.entur.io
-    trafficType: api
+    trafficType: internal

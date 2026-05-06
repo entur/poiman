@@ -1,5 +1,6 @@
 import { sql, type Poi, type PoiInput } from "../db.ts";
 import { userEmail } from "../auth.ts";
+import { POI_TYPES, isPoiType } from "../poiTypes.ts";
 
 // bigserial comes back from Bun.sql as a string to preserve precision;
 // our IDs fit comfortably in Number, and the wire format is plain JSON.
@@ -10,7 +11,14 @@ function one<T extends { id: unknown }>(row: T): T {
   return { ...row, id: Number(row.id) };
 }
 
-const ALLOWED_TYPES = new Set(["concert", "festival", "event"]);
+// Column list for SELECT and RETURNING. Bun.sql treats nested `sql\`...\``
+// fragments as raw substitution, so this stays parameter-free and safe to
+// interpolate into the queries below.
+const POI_COLS = sql`
+  id, name, poi_type, longitude, latitude,
+  valid_from, valid_to, deleted_at, created_at, updated_at,
+  created_by, last_edited_by
+`;
 
 // Cap coordinate precision at 5 decimal places (~1.1m at Norwegian latitudes).
 function round5(n: number): number {
@@ -32,8 +40,8 @@ function parseInput(raw: unknown): PoiInput | string {
   if (!raw || typeof raw !== "object") return "body must be an object";
   const r = raw as Record<string, unknown>;
   if (typeof r.name !== "string" || r.name.trim() === "") return "name required";
-  if (typeof r.poi_type !== "string" || !ALLOWED_TYPES.has(r.poi_type))
-    return `poi_type must be one of ${[...ALLOWED_TYPES].join(", ")}`;
+  if (!isPoiType(r.poi_type))
+    return `poi_type must be one of ${POI_TYPES.join(", ")}`;
   if (typeof r.longitude !== "number" || !Number.isFinite(r.longitude))
     return "longitude must be a number";
   if (typeof r.latitude !== "number" || !Number.isFinite(r.latitude))
@@ -58,10 +66,7 @@ function parseInput(raw: unknown): PoiInput | string {
 
 export async function listPois(): Promise<Response> {
   const rows = (await sql`
-    select id, name, poi_type, longitude, latitude,
-           valid_from, valid_to, deleted_at, created_at, updated_at,
-           created_by, last_edited_by
-    from pois
+    select ${POI_COLS} from pois
     where deleted_at is null
     order by valid_from
   `) as Poi[];
@@ -70,10 +75,7 @@ export async function listPois(): Promise<Response> {
 
 export async function getPoi(id: number): Promise<Response> {
   const rows = (await sql`
-    select id, name, poi_type, longitude, latitude,
-           valid_from, valid_to, deleted_at, created_at, updated_at,
-           created_by, last_edited_by
-    from pois
+    select ${POI_COLS} from pois
     where id = ${id} and deleted_at is null
   `) as Poi[];
   const poi = rows[0];
@@ -92,11 +94,11 @@ export async function createPoi(req: Request): Promise<Response> {
     values (${parsed.name}, ${parsed.poi_type}, ${parsed.longitude},
             ${parsed.latitude}, ${parsed.valid_from}, ${parsed.valid_to},
             ${user}, ${user})
-    returning id, name, poi_type, longitude, latitude,
-              valid_from, valid_to, deleted_at, created_at, updated_at,
-              created_by, last_edited_by
+    returning ${POI_COLS}
   `) as Poi[];
-  return json(one(rows[0]!), 201);
+  const row = rows[0];
+  if (!row) return err(500, "insert returned no rows");
+  return json(one(row), 201);
 }
 
 export async function updatePoi(id: number, req: Request): Promise<Response> {
@@ -115,12 +117,11 @@ export async function updatePoi(id: number, req: Request): Promise<Response> {
       last_edited_by = ${user},
       updated_at     = now()
     where id = ${id} and deleted_at is null
-    returning id, name, poi_type, longitude, latitude,
-              valid_from, valid_to, deleted_at, created_at, updated_at,
-              created_by, last_edited_by
+    returning ${POI_COLS}
   `) as Poi[];
-  if (rows.length === 0) return err(404, "not found");
-  return json(one(rows[0]!));
+  const row = rows[0];
+  if (!row) return err(404, "not found");
+  return json(one(row));
 }
 
 export async function deletePoi(id: number): Promise<Response> {

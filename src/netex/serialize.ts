@@ -23,8 +23,17 @@ export function formatOsloIso(d: Date): string {
   return OSLO_FMT.format(d).replace(" ", "T");
 }
 
+// XML 1.0 forbids most C0 control chars (allows TAB \x09, LF \x0A, CR \x0D).
+// Strip the rest before escaping, otherwise a stray \v in a name produces a
+// non-well-formed document.
+const XML_INVALID_CTRL_RE = new RegExp(
+  "[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]",
+  "g",
+);
+
 function escapeXml(s: string): string {
   return s
+    .replace(XML_INVALID_CTRL_RE, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -32,6 +41,10 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
+// Coordinates are rounded to 5 decimals on insert/update in routes/pois.ts
+// (and on import in netex/parse.ts). The serializer emits whatever's in
+// the row verbatim, preserving precision for older rows that pre-date the
+// rounding rule.
 function poiBlock(p: NetexPoi): string {
   const name = escapeXml(p.name);
   return [

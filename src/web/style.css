@@ -199,17 +199,20 @@ main.map .pinning {
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
-.banner-error {
+.banner-error,
+.banner-notice {
   position: absolute;
   top: 60px; left: 50%;
   transform: translateX(-50%);
-  background: #fee2e2;
-  color: #991b1b;
   padding: 8px 14px;
   border-radius: 4px;
   font-size: 13px;
   z-index: 20;
 }
+.banner-error  { background: #fee2e2; color: #991b1b; }
+.banner-notice { background: #dcfce7; color: #166534; }
+.banner-notice + .banner-error,
+.banner-error  + .banner-notice { top: 96px; }
 
 .modal-backdrop {
   position: fixed;

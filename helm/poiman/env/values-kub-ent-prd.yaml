@@ -2,4 +2,5 @@ common:
   env: prd
   ingress:
     host: poiman.entur.io
-    trafficType: api
+    trafficType: internal
+  replicas: 2

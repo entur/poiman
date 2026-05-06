@@ -18,6 +18,22 @@ const WEB_DIST = join(ROOT, "..", "dist", "web");
 const WEB_SRC = join(ROOT, "web");
 const DEV = process.env.POIMAN_DEV === "1";
 
+// Refuse to boot if the dev fallback is enabled in a production-like env.
+// Without this guard, `userEmail()` would silently stamp every edit as
+// `dev@local` instead of the real signed-in user.
+if (DEV && process.env.NODE_ENV === "production") {
+  console.error(
+    "FATAL: POIMAN_DEV=1 is set in a production environment. " +
+      "This would stamp every edit as the dev fallback user. Refusing to start.",
+  );
+  process.exit(1);
+}
+
+// Hard cap on the import body so a malicious or misbehaving client cannot
+// stream gigabytes into req.text(). The full prod XML is ~30 KB; 10 MB is
+// generous headroom.
+const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
+
 await migrate(join(ROOT, "migrations"));
 
 const counters = {
@@ -50,6 +66,37 @@ function metrics(): Response {
 
 const POI_ID_RE = /^\/api\/pois\/(\d+)$/;
 
+const WRITE_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
+
+// CSRF: writes are gated to same-origin requests. The IAP/Auth0 frontdoor
+// passes `X-Forwarded-Email` for any logged-in user, so any tab the user
+// has open could otherwise be coerced into POSTing on their behalf. We
+// reject write requests whose Origin (or Referer fallback) doesn't match
+// the request host. Reads stay open (auth alone gates them).
+function csrfOk(req: Request, url: URL): boolean {
+  const origin = req.headers.get("origin");
+  const referer = req.headers.get("referer");
+  const expected = `${url.protocol}//${url.host}`;
+  if (origin) return origin === expected;
+  if (referer) {
+    try {
+      const r = new URL(referer);
+      return `${r.protocol}//${r.host}` === expected;
+    } catch {
+      return false;
+    }
+  }
+  // No Origin and no Referer means no browser context. Reject to be safe.
+  return false;
+}
+
+function jsonError(status: number, message: string): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 async function handle(req: Request, url: URL): Promise<Response> {
   const { pathname } = url;
   const method = req.method;
@@ -58,14 +105,24 @@ async function handle(req: Request, url: URL): Promise<Response> {
   if (pathname === "/readiness") return readiness();
   if (pathname === "/metrics") return metrics();
 
+  if (WRITE_METHODS.has(method) && !csrfOk(req, url)) {
+    return jsonError(403, "cross-origin write rejected");
+  }
+
   if (pathname === "/api/me" && method === "GET") return me(req);
   if (pathname === "/api/export/netex" && method === "GET") return exportNetex();
-  if (pathname === "/api/import/netex" && method === "POST") return importNetex(req);
+  if (pathname === "/api/import/netex" && method === "POST") {
+    const len = Number(req.headers.get("content-length"));
+    if (Number.isFinite(len) && len > MAX_IMPORT_BYTES) {
+      return jsonError(413, `payload too large (max ${MAX_IMPORT_BYTES} bytes)`);
+    }
+    return importNetex(req);
+  }
 
   if (pathname === "/api/pois") {
     if (method === "GET") return listPois();
     if (method === "POST") return createPoi(req);
-    return new Response("method not allowed", { status: 405 });
+    return jsonError(405, "method not allowed");
   }
   const m = POI_ID_RE.exec(pathname);
   if (m) {
@@ -73,7 +130,7 @@ async function handle(req: Request, url: URL): Promise<Response> {
     if (method === "GET") return getPoi(id);
     if (method === "PUT") return updatePoi(id, req);
     if (method === "DELETE") return deletePoi(id);
-    return new Response("method not allowed", { status: 405 });
+    return jsonError(405, "method not allowed");
   }
 
   // Static SPA: serve index.html for /, bundled assets, and any unknown
