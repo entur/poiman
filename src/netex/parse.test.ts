@@ -3,16 +3,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseNetex } from "./parse.ts";
 
-const FIXTURE = join(
-  import.meta.dir,
-  "../../../geocoder-data/events_norway_poi.xml",
-);
+const FIXTURE = join(import.meta.dir, "__fixtures__/three_pois.xml");
 
 describe("parseNetex", () => {
-  test("round-trips events_norway_poi.xml", () => {
+  test("parses the three_pois fixture", () => {
     const xml = readFileSync(FIXTURE, "utf8");
     const rows = parseNetex(xml);
-    expect(rows.length).toBeGreaterThan(20);
+    expect(rows).toHaveLength(3);
 
     const first = rows[0]!;
     expect(first.id).toBe(1);

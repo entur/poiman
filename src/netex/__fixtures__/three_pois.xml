@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='utf-8'?>
+<PublicationDelivery xmlns="http://www.netex.org.uk/netex" version="1.5">
+    <PublicationTimestamp>2026-04-27T10:18:55</PublicationTimestamp>
+    <ParticipantRef>ENT</ParticipantRef>
+    <Description>Enturs markedsavdelings-NeTEx</Description>
+    <dataObjects>
+        <SiteFrame version="1" id="ENT:SiteFrame:1">
+            <ValidBetween>
+                <FromDate>2026-04-27T10:18:55</FromDate>
+            </ValidBetween>
+            <codespaces>
+                <Codespace id="ENT">
+                    <Xmlns>ENT</Xmlns>
+                    <XmlnsUrl>http://www.rutebanken.org/ns/ent</XmlnsUrl>
+                </Codespace>
+            </codespaces>
+            <FrameDefaults>
+                <DefaultLocale>
+                    <TimeZone>Europe/Oslo</TimeZone>
+                    <DefaultLanguage>no</DefaultLanguage>
+                </DefaultLocale>
+            </FrameDefaults>
+            <topographicPlaces>
+                <TopographicPlace id="ENT:TopographicPlace:1" version="1">
+                    <ValidBetween>
+                        <FromDate>2026-03-01T00:00:00</FromDate>
+                        <ToDate>2026-06-10T23:59:00</ToDate>
+                    </ValidBetween>
+                    <keyList>
+                        <KeyValue>
+                            <Key>custom_poi</Key>
+                            <Value>concert</Value>
+                        </KeyValue>
+                    </keyList>
+                    <Name>FOO FIGHTERS Live på Unity Arena, Oslo 10. juni</Name>
+                    <Centroid>
+                        <Location>
+                            <Longitude>10.6253457</Longitude>
+                            <Latitude>59.9026751</Latitude>
+                        </Location>
+                    </Centroid>
+                    <Descriptor>
+                        <Name>FOO FIGHTERS Live på Unity Arena, Oslo 10. juni</Name>
+                    </Descriptor>
+                    <TopographicPlaceType>placeOfInterest</TopographicPlaceType>
+                </TopographicPlace>
+                <TopographicPlace id="ENT:TopographicPlace:2" version="1">
+                    <ValidBetween>
+                        <FromDate>2026-02-01T12:00:00</FromDate>
+                        <ToDate>2026-06-28T12:00:00</ToDate>
+                    </ValidBetween>
+                    <keyList>
+                        <KeyValue>
+                            <Key>custom_poi</Key>
+                            <Value>festival</Value>
+                        </KeyValue>
+                    </keyList>
+                    <Name>TONS OF ROCK festival Ekeberg</Name>
+                    <Centroid>
+                        <Location>
+                            <Longitude>10.7753778</Longitude>
+                            <Latitude>59.8980314</Latitude>
+                        </Location>
+                    </Centroid>
+                    <Descriptor>
+                        <Name>TONS OF ROCK festival Ekeberg</Name>
+                    </Descriptor>
+                    <TopographicPlaceType>placeOfInterest</TopographicPlaceType>
+                </TopographicPlace>
+                <TopographicPlace id="ENT:TopographicPlace:3" version="1">
+                    <ValidBetween>
+                        <FromDate>2026-02-06T03:00:00</FromDate>
+                        <ToDate>2026-04-06T03:00:00</ToDate>
+                    </ValidBetween>
+                    <keyList>
+                        <KeyValue>
+                            <Key>custom_poi</Key>
+                            <Value>festival</Value>
+                        </KeyValue>
+                    </keyList>
+                    <Name>INFERNO METAL FESTIVAL 2026 Oslo</Name>
+                    <Centroid>
+                        <Location>
+                            <Longitude>10.7513773</Longitude>
+                            <Latitude>59.915542</Latitude>
+                        </Location>
+                    </Centroid>
+                    <Descriptor>
+                        <Name>INFERNO METAL FESTIVAL 2026 Oslo</Name>
+                    </Descriptor>
+                    <TopographicPlaceType>placeOfInterest</TopographicPlaceType>
+                </TopographicPlace>
+            </topographicPlaces>
+        </SiteFrame>
+    </dataObjects>
+</PublicationDelivery>

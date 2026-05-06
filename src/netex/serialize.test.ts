@@ -3,10 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { formatOsloIso, serializeNetex, type NetexPoi } from "./serialize.ts";
 
-const FIXTURE = join(
-  import.meta.dir,
-  "../../../geocoder-data/events_norway_poi.xml",
-);
+const FIXTURE = join(import.meta.dir, "__fixtures__/three_pois.xml");
 
 // First three TopographicPlace entries from events_norway_poi.xml.
 // Wall-clock times in Europe/Oslo. CET (+01) before 2026-03-29, CEST (+02) after.
@@ -50,27 +47,14 @@ describe("serializeNetex", () => {
     );
   });
 
-  test("matches events_norway_poi.xml byte-for-byte for first 3 POIs", () => {
+  test("matches the three_pois fixture byte-for-byte", () => {
     const fixture = readFileSync(FIXTURE, "utf8");
-
-    // Pull the original PublicationTimestamp so the test is deterministic.
-    const tsMatch =
-      /<PublicationTimestamp>([^<]+)<\/PublicationTimestamp>/.exec(fixture);
-    expect(tsMatch).not.toBeNull();
-    const fixedNow = new Date(tsMatch![1]! + "+02:00"); // late April -> CEST
-
+    // Late April -> CEST (+02), reproducing the timestamp encoded in the
+    // fixture so the comparison is deterministic.
+    const fixedNow = new Date("2026-04-27T10:18:55+02:00");
     const generated = serializeNetex(SAMPLE, fixedNow);
-
-    // Cut both files to just the first 3 TopographicPlace blocks for comparison.
-    const slice = (xml: string) => {
-      const open = xml.indexOf("<topographicPlaces>");
-      const places = xml.slice(open);
-      const closes = [...places.matchAll(/<\/TopographicPlace>/g)];
-      const endOfThird = closes[2]!.index! + "</TopographicPlace>".length;
-      return xml.slice(0, open) + places.slice(0, endOfThird);
-    };
-
-    expect(slice(generated)).toBe(slice(fixture));
+    // Trim trailing newline the fixture file picks up from the editor.
+    expect(generated.trimEnd()).toBe(fixture.trimEnd());
   });
 
   test("escapes special characters in names", () => {
