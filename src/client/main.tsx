@@ -8,7 +8,7 @@ import {
 } from "react-oidc-context";
 import type { UserManagerSettings } from "oidc-client-ts";
 import { accessToken, onUnauthorized } from "./api.ts";
-import { POI_TYPES, type PoiType } from "../shared/poiTypes.ts";
+import { type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
   type GeoJSONSource,
@@ -32,10 +32,6 @@ const pendingImport = signal<{ name: string; xml: string } | null>(null);
 const pendingDelete = signal<Poi | null>(null);
 const importing = signal(false);
 const currentUser = signal<string | null>(null);
-// Bumped by finishDrag after a successful PUT, so the open form (if any)
-// can pick up the new lon/lat without overwriting in-flight keystrokes
-// from unrelated refreshes.
-const lastDragCommit = signal<{ id: number; lng: number; lat: number; ts: number } | null>(null);
 
 // Form draft, lifted to module scope so dirty-checking and navigation
 // blocking can read it from outside the Form component. Mutated by the
@@ -883,17 +879,6 @@ function Form() {
         />
       </div>
       <div class="actions">
-        <button
-          class="icon-btn"
-          title="Discard unsaved changes"
-          aria-label="Discard unsaved changes"
-          disabled={!isDirty.value}
-          onClick={() => {
-            draft.value = { ...baseline };
-          }}
-        >
-          <UndoIcon />
-        </button>
         <button class="primary" onClick={save} disabled={!isDirty.value}>
           Save
         </button>
@@ -902,6 +887,17 @@ function Form() {
         </button>
         <button class="ghost" onClick={() => requestSelect(null)}>
           Close
+        </button>
+        <button
+            class="icon-btn"
+            title="Discard unsaved changes"
+            aria-label="Discard unsaved changes"
+            disabled={!isDirty.value}
+            onClick={() => {
+              draft.value = { ...baseline };
+            }}
+        >
+          <UndoIcon />
         </button>
       </div>
       <div class="form-meta">
