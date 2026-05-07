@@ -3,7 +3,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { migrate, sql } from "../src/server/db.ts";
+import { migrate, sql, waitForDb } from "../src/server/db.ts";
 import { parseNetex } from "../src/shared/netex/parse.ts";
 
 const path =
@@ -14,6 +14,7 @@ const xml = await readFile(path, "utf8");
 const rows = parseNetex(xml);
 console.log(`parsed ${rows.length} POIs from ${path}`);
 
+await waitForDb();
 await migrate(join(import.meta.dir, "..", "src", "server", "migrations"));
 
 await sql.begin(async (tx) => {

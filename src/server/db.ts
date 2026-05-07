@@ -47,6 +47,27 @@ function connectionUrl(): string {
 
 export const sql = new SQL(connectionUrl());
 
+// Wait until Postgres accepts a real query, not just TCP. The CloudSQL
+// proxy / docker-compose / GHA service-container all return TCP-ready
+// before role/auth init is complete on first boot, which races with the
+// migration's first statement. Retries until either ok or timeout.
+export async function waitForDb(
+  maxAttempts = 20,
+  delayMs = 250,
+): Promise<void> {
+  let lastErr: unknown;
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      await sql`select 1`;
+      return;
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
 export async function migrate(migrationsDir: string): Promise<void> {
   await sql`
     create table if not exists schema_migrations (

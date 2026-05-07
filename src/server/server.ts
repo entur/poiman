@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { migrate } from "./db.ts";
+import { migrate, waitForDb } from "./db.ts";
 import { liveness, readiness } from "./routes/health.ts";
 import {
   createPoi,
@@ -49,6 +49,7 @@ if (!authDisabled && !oidcConfigured) {
 // generous headroom.
 const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
+await waitForDb();
 await migrate(join(ROOT, "migrations"));
 
 const counters = {

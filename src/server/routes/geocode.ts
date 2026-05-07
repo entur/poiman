@@ -1,10 +1,7 @@
-import { audience } from "../oidc.ts";
-
-// Entur geocoder lives at https://api.<env>.entur.io/geocoder/v2/...
-// OIDC_AUDIENCE is already that host per env. Local dev without OIDC
-// configured falls back to api.dev.entur.io.
-const GEOCODER_BASE =
-  (audience || "https://api.dev.entur.io") + "/geocoder/v2/autocomplete";
+// Always use the prd Entur geocoder. It's a public, read-only service
+// and is the most stable tier; pinning here avoids a per-env config and
+// stops dev/staging flakes propagating into CI.
+const GEOCODER_BASE = "https://api.entur.io/geocoder/v2/autocomplete";
 
 const ET_CLIENT_NAME = "entur-poiman";
 
