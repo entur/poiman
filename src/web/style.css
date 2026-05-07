@@ -149,6 +149,11 @@ aside.side {
   border-radius: 4px;
   font: inherit;
 }
+/* Highlight unsaved changes with an amber wash + border. */
+.form input.dirty, .form select.dirty {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
 .form .actions {
   grid-column: 1 / -1;
   display: flex;
@@ -170,6 +175,35 @@ aside.side {
 .form .err { grid-column: 1 / -1; color: #b91c1c; font-size: 12px; }
 .form .form-pair { display: flex; gap: 6px; }
 .form .form-pair > * { flex: 1 1 0; min-width: 0; }
+
+.form .address-search { position: relative; }
+.form .address-search input { width: 100%; }
+.form .address-search .address-results {
+  position: absolute;
+  z-index: 30;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+.form .address-search .address-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.form .address-search .address-result:hover { background: #eef2ff; }
 .form .form-meta {
   grid-column: 1 / -1;
   font-size: 11px;

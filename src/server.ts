@@ -11,6 +11,7 @@ import {
 import { exportNetex } from "./routes/export.ts";
 import { importNetex } from "./routes/import.ts";
 import { config } from "./routes/config.ts";
+import { geocode } from "./routes/geocode.ts";
 import { authenticate } from "./auth.ts";
 import { configured as oidcConfigured, authDisabled, devMode } from "./oidc.ts";
 
@@ -141,6 +142,7 @@ async function handle(req: Request, url: URL): Promise<Response> {
     if (!auth.ok) return jsonError(auth.status, auth.error);
   }
 
+  if (pathname === "/api/geocode" && method === "GET") return geocode(req);
   if (pathname === "/api/import/netex" && method === "POST") {
     const len = Number(req.headers.get("content-length"));
     if (Number.isFinite(len) && len > MAX_IMPORT_BYTES) {

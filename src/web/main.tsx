@@ -37,6 +37,27 @@ const currentUser = signal<string | null>(null);
 // from unrelated refreshes.
 const lastDragCommit = signal<{ id: number; lng: number; lat: number; ts: number } | null>(null);
 
+// Form draft, lifted to module scope so dirty-checking and navigation
+// blocking can read it from outside the Form component. Mutated by the
+// form inputs, by drag-to-move, and by address search confirmations.
+type Draft = {
+  name: string;
+  poi_type: string;
+  longitude: number;
+  latitude: number;
+  valid_from: string;
+  valid_to: string;
+};
+const draft = signal<Draft | null>(null);
+
+// Pending navigation when the user tries to switch away from a dirty
+// form. The `to` is the next selectedId we'd jump to (null = clear).
+const pendingNav = signal<number | null | undefined>(undefined);
+
+// Pending address-search pick. When set, the form shows a confirm modal
+// asking whether to move the location.
+const pendingAddressMove = signal<{ label: string; lon: number; lat: number } | null>(null);
+
 const visiblePois = computed(() => {
   const q = filterText.value.toLowerCase().trim();
   const t = filterType.value;
@@ -61,6 +82,62 @@ const visiblePois = computed(() => {
 const selectedPoi = computed(() =>
   pois.value.find((p) => p.id === selectedId.value) ?? null,
 );
+
+function draftFromPoi(p: Poi): Draft {
+  return {
+    name: p.name,
+    poi_type: p.poi_type,
+    longitude: round5(p.longitude),
+    latitude: round5(p.latitude),
+    valid_from: toDateInput(p.valid_from),
+    valid_to: toDateInput(p.valid_to),
+  };
+}
+
+function round5(n: number): number {
+  return Math.round(n * 1e5) / 1e5;
+}
+
+const draftBaseline = computed(() => {
+  const p = selectedPoi.value;
+  return p ? draftFromPoi(p) : null;
+});
+
+// Dirty if any field of the live draft differs from the baseline (the
+// last server-known state for the selected POI).
+const isDirty = computed(() => {
+  const d = draft.value;
+  const b = draftBaseline.value;
+  if (!d || !b) return false;
+  return (
+    d.name !== b.name ||
+    d.poi_type !== b.poi_type ||
+    d.longitude !== b.longitude ||
+    d.latitude !== b.latitude ||
+    d.valid_from !== b.valid_from ||
+    d.valid_to !== b.valid_to
+  );
+});
+
+// Reset draft from baseline whenever the selection changes (and the
+// existing draft isn't dirty - if it is, the navigation gate should
+// have caught the change before it landed here).
+effect(() => {
+  const b = draftBaseline.value;
+  draft.value = b ? { ...b } : null;
+});
+
+// Navigation gate: requested target id (number | null) goes through
+// here. If the form is dirty, stash in pendingNav so the modal can ask;
+// otherwise commit immediately.
+function requestSelect(id: number | null): void {
+  if (id === selectedId.value) return;
+  if (isDirty.value) {
+    pendingNav.value = id;
+    return;
+  }
+  selectedId.value = id;
+}
 
 async function refresh(): Promise<void> {
   try {
@@ -174,27 +251,31 @@ const COLORS: Record<string, string> = {
 type DragOverride = { id: number; lng: number; lat: number };
 
 function toGeoJSON(rows: Poi[], drag: DragOverride | null) {
+  // Render the selected POI at the draft's lat/lon (if set) so that
+  // form-side changes (address pick, manual edit, drag-into-draft) show
+  // up live on the map without saving. drag override wins over draft.
+  const selId = selectedId.value;
+  const d = draft.value;
   return {
     type: "FeatureCollection" as const,
-    features: rows.map((p) => ({
-      type: "Feature" as const,
-      id: p.id,
-      properties: {
+    features: rows.map((p) => {
+      let coords: [number, number] = [p.longitude, p.latitude];
+      if (drag && drag.id === p.id) coords = [drag.lng, drag.lat];
+      else if (selId === p.id && d) coords = [d.longitude, d.latitude];
+      return {
+        type: "Feature" as const,
         id: p.id,
-        name: p.name,
-        poi_type: p.poi_type,
-        valid_from: p.valid_from,
-        valid_to: p.valid_to,
-        color: COLORS[p.poi_type] ?? "#6b7280",
-      },
-      geometry: {
-        type: "Point" as const,
-        coordinates:
-          drag && drag.id === p.id
-            ? [drag.lng, drag.lat]
-            : [p.longitude, p.latitude],
-      },
-    })),
+        properties: {
+          id: p.id,
+          name: p.name,
+          poi_type: p.poi_type,
+          valid_from: p.valid_from,
+          valid_to: p.valid_to,
+          color: COLORS[p.poi_type] ?? "#6b7280",
+        },
+        geometry: { type: "Point" as const, coordinates: coords },
+      };
+    }),
   };
 }
 
@@ -225,6 +306,10 @@ function MapView() {
       zoom: 5,
     });
     mapRef.current = map;
+    map.addControl(
+      new maplibregl.NavigationControl({ showCompass: false }),
+      "top-right",
+    );
 
     const tooltip = new maplibregl.Popup({
       closeButton: false,
@@ -331,7 +416,7 @@ function MapView() {
         if (pinning.value) return;
         const f = e.features?.[0];
         if (!f) return;
-        selectedId.value = Number((f.properties as { id: number }).id);
+        requestSelect(Number((f.properties as { id: number }).id));
       },
     );
     map.on("click", async (e) => {
@@ -343,7 +428,7 @@ function MapView() {
       const hits = map.queryRenderedFeatures(e.point, {
         layers: ["pois-fill"],
       });
-      if (hits.length === 0) selectedId.value = null;
+      if (hits.length === 0) requestSelect(null);
     });
 
     // Drag: mousedown on a feature -> disable map pan, track drag in ref.
@@ -355,8 +440,11 @@ function MapView() {
         if (pinning.value) return;
         const f = e.features?.[0];
         if (!f) return;
-        e.preventDefault();
         const id = Number((f.properties as { id: number }).id);
+        // Only the selected POI is draggable - dragging is a form edit,
+        // not a navigation. Click selects first, then drag to nudge.
+        if (id !== selectedId.value) return;
+        e.preventDefault();
         dragRef.current = { id, lng: e.lngLat.lng, lat: e.lngLat.lat };
         map.getCanvas().style.cursor = "grabbing";
         tooltip.remove();
@@ -369,34 +457,25 @@ function MapView() {
       drag.lat = e.lngLat.lat;
       setSourceData();
     });
-    const finishDrag = async () => {
+    // Drag commits to the open form's draft (NOT to the API). The user
+    // has to click Save to persist. If the dragged POI isn't currently
+    // selected, this is a no-op for the draft - the existing GeoJSON
+    // override falls away on the next sync.
+    const finishDrag = () => {
       const drag = dragRef.current;
       if (!drag) return;
       dragRef.current = null;
       map.getCanvas().style.cursor = "";
-      const original = pois.value.find((p) => p.id === drag.id);
-      if (!original) return;
-      try {
-        const updated = await api.update(drag.id, {
-          name: original.name,
-          poi_type: original.poi_type,
-          longitude: drag.lng,
-          latitude: drag.lat,
-          valid_from: original.valid_from,
-          valid_to: original.valid_to,
-        });
-        pois.value = pois.value.map((p) =>
-          p.id === drag.id ? updated : p,
-        );
-        lastDragCommit.value = {
-          id: drag.id,
-          lng: updated.longitude,
-          lat: updated.latitude,
-          ts: Date.now(),
+      // Only stamp the draft if the dragged POI is the one being edited.
+      if (selectedId.value === drag.id && draft.value) {
+        draft.value = {
+          ...draft.value,
+          longitude: round5(drag.lng),
+          latitude: round5(drag.lat),
         };
-      } catch (err) {
-        showError(err);
-        await refresh();
+      } else {
+        // Snap the visual back; the source data wins.
+        setSourceData();
       }
     };
     map.on("mouseup", finishDrag);
@@ -405,9 +484,13 @@ function MapView() {
       if (dragRef.current) finishDrag();
     });
 
-    // Push data + selection updates whenever signals change.
+    // Push data + selection updates whenever signals change. Also re-render
+    // when the draft's lat/lon change so address-pick / manual edits show
+    // up on the map without a save.
     const stopSync = effect(() => {
       void pois.value;
+      void draft.value;
+      void selectedId.value;
       setSourceData();
     });
     const stopSel = effect(() => {
@@ -462,7 +545,7 @@ async function createAt(lon: number, lat: number): Promise<void> {
       valid_to: end.toISOString(),
     });
     pois.value = [...pois.value, created];
-    selectedId.value = created.id;
+    requestSelect(created.id);
   } catch (e) {
     showError(e);
   }
@@ -552,7 +635,7 @@ function List() {
                 title="Edit"
                 aria-label="Edit"
                 onClick={() => {
-                  selectedId.value = p.id;
+                  requestSelect(p.id);
                   mapApi?.focus(p);
                 }}
               >
@@ -576,53 +659,81 @@ function List() {
   );
 }
 
-type Draft = {
-  name: string;
-  poi_type: string;
-  longitude: number;
-  latitude: number;
-  valid_from: string;
-  valid_to: string;
-};
+function AddressSearch({
+  onPick,
+}: {
+  onPick: (label: string, lon: number, lat: number) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<
+    { label: string; lon: number; lat: number }[]
+  >([]);
+  const [open, setOpen] = useState(false);
 
-function round5(n: number): number {
-  return Math.round(n * 1e5) / 1e5;
-}
+  // Debounced fetch on every query change. AbortController cancels any
+  // in-flight request when the user keeps typing.
+  useEffect(() => {
+    if (query.trim().length < 3) {
+      setResults([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const r = await api.searchAddress(query);
+        if (!ctrl.signal.aborted) {
+          setResults(r);
+          setOpen(true);
+        }
+      } catch (err) {
+        if (!ctrl.signal.aborted) console.error("address search failed", err);
+      }
+    }, 300);
+    return () => {
+      ctrl.abort();
+      clearTimeout(timer);
+    };
+  }, [query]);
 
-function draftFrom(p: Poi): Draft {
-  return {
-    name: p.name,
-    poi_type: p.poi_type,
-    longitude: round5(p.longitude),
-    latitude: round5(p.latitude),
-    valid_from: toDateInput(p.valid_from),
-    valid_to: toDateInput(p.valid_to),
-  };
+  return (
+    <div class="address-search">
+      <input
+        type="search"
+        placeholder="Norwegian street address"
+        value={query}
+        onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
+        onFocus={() => results.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && results.length > 0 && (
+        <div class="address-results">
+          {results.map((r, i) => (
+            <button
+              key={i}
+              type="button"
+              class="address-result"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onPick(r.label, r.lon, r.lat);
+                setQuery(r.label);
+                setOpen(false);
+              }}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Form() {
   const sel = selectedPoi.value;
-  const [draft, setDraft] = useState<Draft | null>(sel ? draftFrom(sel) : null);
+  const d = draft.value;
+  const baseline = draftBaseline.value;
 
-  // Reset draft only when the selected id (or selection cleared) changes,
-  // not on every server-side refresh of the same row.
-  useEffect(() => {
-    setDraft(sel ? draftFrom(sel) : null);
-  }, [sel?.id]);
-
-  // Drag-to-move on the map commits via PUT and bumps lastDragCommit. Pull
-  // those new coordinates into the draft (only when the dragged POI is the
-  // one currently being edited). A bare `pois.value` refresh that happens
-  // for unrelated reasons no longer overwrites in-flight lon/lat keystrokes.
-  const drag = lastDragCommit.value;
-  useEffect(() => {
-    if (!drag || !sel || drag.id !== sel.id) return;
-    setDraft((d) =>
-      d ? { ...d, longitude: round5(drag.lng), latitude: round5(drag.lat) } : d,
-    );
-  }, [drag?.ts]);
-
-  if (!sel || !draft) {
+  if (!sel || !d || !baseline) {
     return (
       <div class="form">
         <h3>No POI selected</h3>
@@ -634,18 +745,21 @@ function Form() {
   }
 
   const update = <K extends keyof Draft>(k: K, v: Draft[K]) => {
-    setDraft((d) => (d ? { ...d, [k]: v } : d));
+    draft.value = { ...d, [k]: v };
   };
+
+  const dirtyClass = (k: keyof Draft) =>
+    d[k] !== baseline[k] ? "dirty" : "";
 
   const save = async () => {
     try {
       const updated = await api.update(sel.id, {
-        name: draft.name,
-        poi_type: draft.poi_type,
-        longitude: Number(draft.longitude),
-        latitude: Number(draft.latitude),
-        valid_from: fromDateInput(draft.valid_from, "00:00:00"),
-        valid_to: fromDateInput(draft.valid_to, "23:59:59"),
+        name: d.name,
+        poi_type: d.poi_type,
+        longitude: Number(d.longitude),
+        latitude: Number(d.latitude),
+        valid_from: fromDateInput(d.valid_from, "00:00:00"),
+        valid_to: fromDateInput(d.valid_to, "23:59:59"),
       });
       pois.value = pois.value.map((p) => (p.id === sel.id ? updated : p));
     } catch (e) {
@@ -662,12 +776,14 @@ function Form() {
       <h3>Edit POI #{sel.id}</h3>
       <label>Name</label>
       <input
-        value={draft.name}
+        class={dirtyClass("name")}
+        value={d.name}
         onInput={(e) => update("name", (e.target as HTMLInputElement).value)}
       />
       <label>Type</label>
       <select
-        value={draft.poi_type}
+        class={dirtyClass("poi_type")}
+        value={d.poi_type}
         onChange={(e) =>
           update("poi_type", (e.target as HTMLSelectElement).value)
         }
@@ -676,13 +792,20 @@ function Form() {
         <option value="festival">festival</option>
         <option value="event">event</option>
       </select>
+      <label>Address</label>
+      <AddressSearch
+        onPick={(label, lon, lat) => {
+          pendingAddressMove.value = { label, lon, lat };
+        }}
+      />
       <label>Lon / Lat</label>
       <div class="form-pair">
         <input
           type="number"
           step="0.00001"
           aria-label="Longitude"
-          value={draft.longitude}
+          class={dirtyClass("longitude")}
+          value={d.longitude}
           onInput={(e) =>
             update("longitude", Number((e.target as HTMLInputElement).value))
           }
@@ -691,7 +814,8 @@ function Form() {
           type="number"
           step="0.00001"
           aria-label="Latitude"
-          value={draft.latitude}
+          class={dirtyClass("latitude")}
+          value={d.latitude}
           onInput={(e) =>
             update("latitude", Number((e.target as HTMLInputElement).value))
           }
@@ -702,7 +826,8 @@ function Form() {
         <input
           type="date"
           aria-label="Valid from"
-          value={draft.valid_from}
+          class={dirtyClass("valid_from")}
+          value={d.valid_from}
           onInput={(e) =>
             update("valid_from", (e.target as HTMLInputElement).value)
           }
@@ -710,25 +835,21 @@ function Form() {
         <input
           type="date"
           aria-label="Valid to"
-          value={draft.valid_to}
+          class={dirtyClass("valid_to")}
+          value={d.valid_to}
           onInput={(e) =>
             update("valid_to", (e.target as HTMLInputElement).value)
           }
         />
       </div>
       <div class="actions">
-        <button class="primary" onClick={save}>
+        <button class="primary" onClick={save} disabled={!isDirty.value}>
           Save
         </button>
         <button class="danger" onClick={remove}>
           Delete
         </button>
-        <button
-          class="ghost"
-          onClick={() => {
-            selectedId.value = null;
-          }}
-        >
+        <button class="ghost" onClick={() => requestSelect(null)}>
           Close
         </button>
       </div>
@@ -914,12 +1035,110 @@ function DeleteDialog() {
   );
 }
 
+function AddressMoveDialog() {
+  const pick = pendingAddressMove.value;
+  const sel = selectedPoi.value;
+  if (!pick || !sel) return null;
+  const cancel = () => {
+    pendingAddressMove.value = null;
+  };
+  const apply = () => {
+    const d = draft.value;
+    if (!d) return;
+    draft.value = {
+      ...d,
+      longitude: round5(pick.lon),
+      latitude: round5(pick.lat),
+    };
+    mapApi?.focus({ ...sel, longitude: pick.lon, latitude: pick.lat });
+    pendingAddressMove.value = null;
+  };
+  return (
+    <div class="modal-backdrop" onClick={cancel}>
+      <div class="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Move location</h2>
+        <p>
+          Move <strong>{sel.name}</strong> to <code>{pick.label}</code>?
+          The change is staged in the form; click Save to persist.
+        </p>
+        <div class="modal-actions">
+          <button class="ghost" onClick={cancel}>
+            Cancel
+          </button>
+          <button class="primary" onClick={apply}>
+            Move here
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NavBlockDialog() {
+  const target = pendingNav.value;
+  if (target === undefined) return null;
+  const cancel = () => {
+    pendingNav.value = undefined;
+  };
+  const discard = () => {
+    pendingNav.value = undefined;
+    selectedId.value = target;
+  };
+  const saveAndGo = async () => {
+    const sel = selectedPoi.value;
+    const d = draft.value;
+    if (!sel || !d) {
+      cancel();
+      return;
+    }
+    try {
+      const updated = await api.update(sel.id, {
+        name: d.name,
+        poi_type: d.poi_type,
+        longitude: Number(d.longitude),
+        latitude: Number(d.latitude),
+        valid_from: fromDateInput(d.valid_from, "00:00:00"),
+        valid_to: fromDateInput(d.valid_to, "23:59:59"),
+      });
+      pois.value = pois.value.map((p) => (p.id === sel.id ? updated : p));
+      pendingNav.value = undefined;
+      selectedId.value = target;
+    } catch (e) {
+      showError(e);
+    }
+  };
+  return (
+    <div class="modal-backdrop" onClick={cancel}>
+      <div class="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Unsaved changes</h2>
+        <p>
+          You have unsaved changes on this POI. Save them before navigating
+          away, discard them, or stay on the current POI.
+        </p>
+        <div class="modal-actions">
+          <button class="ghost" onClick={cancel}>
+            Stay
+          </button>
+          <button class="danger" onClick={discard}>
+            Discard
+          </button>
+          <button class="primary" onClick={saveAndGo}>
+            Save and continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   useEffect(() => {
     refresh();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (pendingDelete.value) pendingDelete.value = null;
+      if (pendingNav.value !== undefined) pendingNav.value = undefined;
+      else if (pendingAddressMove.value) pendingAddressMove.value = null;
+      else if (pendingDelete.value) pendingDelete.value = null;
       else if (pendingImport.value && !importing.value) pendingImport.value = null;
       else pinning.value = false;
     };
@@ -933,6 +1152,8 @@ function App() {
       <MapView />
       <ImportDialog />
       <DeleteDialog />
+      <AddressMoveDialog />
+      <NavBlockDialog />
     </div>
   );
 }

@@ -93,6 +93,26 @@ export const api = {
       }),
     );
   },
+  async searchAddress(
+    q: string,
+  ): Promise<{ label: string; lon: number; lat: number }[]> {
+    const res = await check(
+      await fetch(`/api/geocode?q=${encodeURIComponent(q)}`, {
+        headers: authHeaders(),
+      }),
+    );
+    const json = (await res.json()) as {
+      features?: Array<{
+        properties: { label?: string; name?: string };
+        geometry: { coordinates: [number, number] };
+      }>;
+    };
+    return (json.features ?? []).map((f) => ({
+      label: f.properties.label ?? f.properties.name ?? "",
+      lon: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+    }));
+  },
   async importNetex(
     xml: string,
     mode: "merge" | "replace",
