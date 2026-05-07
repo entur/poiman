@@ -170,8 +170,22 @@ aside.side {
 .form button.primary { background: #2563eb; color: white; }
 .form button.danger  { background: #dc2626; color: white; }
 .form button.ghost   { background: #e5e7eb; color: #1f2937; }
-.form button:hover   { filter: brightness(1.1); }
+.form button:hover:not(:disabled) { filter: brightness(1.1); }
 .form button:disabled { opacity: 0.5; cursor: not-allowed; }
+.form button.icon-btn {
+  padding: 6px;
+  background: transparent;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.form button.icon-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #1f2937;
+  filter: none;
+}
 .form .err { grid-column: 1 / -1; color: #b91c1c; font-size: 12px; }
 .form .form-pair { display: flex; gap: 6px; }
 .form .form-pair > * { flex: 1 1 0; min-width: 0; }

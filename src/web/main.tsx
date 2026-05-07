@@ -217,6 +217,23 @@ const PencilIcon = () => (
   </svg>
 );
 
+const UndoIcon = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </svg>
+);
+
 const TrashIcon = () => (
   <svg
     width="14"
@@ -248,7 +265,21 @@ const COLORS: Record<string, string> = {
   event: "#f59e0b",
 };
 
-type DragOverride = { id: number; lng: number; lat: number };
+type DragOverride = {
+  id: number;
+  lng: number;
+  lat: number;
+  // Screen-pixel coords at mousedown. Used to distinguish "click on the
+  // marker" (no movement) from "drag to nudge" - a click should never
+  // mutate the draft, even if the lngLat under the cursor differs by a
+  // hair from the marker's stored position.
+  startX: number;
+  startY: number;
+};
+
+// Cursor must travel at least this many CSS pixels between mousedown
+// and mouseup to count as a drag.
+const DRAG_THRESHOLD_PX = 4;
 
 function toGeoJSON(rows: Poi[], drag: DragOverride | null) {
   // Render the selected POI at the draft's lat/lon (if set) so that
@@ -445,7 +476,13 @@ function MapView() {
         // not a navigation. Click selects first, then drag to nudge.
         if (id !== selectedId.value) return;
         e.preventDefault();
-        dragRef.current = { id, lng: e.lngLat.lng, lat: e.lngLat.lat };
+        dragRef.current = {
+          id,
+          lng: e.lngLat.lng,
+          lat: e.lngLat.lat,
+          startX: e.point.x,
+          startY: e.point.y,
+        };
         map.getCanvas().style.cursor = "grabbing";
         tooltip.remove();
       },
@@ -461,20 +498,23 @@ function MapView() {
     // has to click Save to persist. If the dragged POI isn't currently
     // selected, this is a no-op for the draft - the existing GeoJSON
     // override falls away on the next sync.
-    const finishDrag = () => {
+    const finishDrag = (e?: MapMouseEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
       dragRef.current = null;
       map.getCanvas().style.cursor = "";
-      // Only stamp the draft if the dragged POI is the one being edited.
-      if (selectedId.value === drag.id && draft.value) {
+      // Treat tiny mousedown/up cursor jitter as a click, not a drag.
+      const dx = (e?.point.x ?? drag.startX) - drag.startX;
+      const dy = (e?.point.y ?? drag.startY) - drag.startY;
+      const moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+      if (moved && selectedId.value === drag.id && draft.value) {
         draft.value = {
           ...draft.value,
           longitude: round5(drag.lng),
           latitude: round5(drag.lat),
         };
       } else {
-        // Snap the visual back; the source data wins.
+        // Click (or drag of a non-selected POI) - snap the visual back.
         setSourceData();
       }
     };
@@ -843,6 +883,17 @@ function Form() {
         />
       </div>
       <div class="actions">
+        <button
+          class="icon-btn"
+          title="Discard unsaved changes"
+          aria-label="Discard unsaved changes"
+          disabled={!isDirty.value}
+          onClick={() => {
+            draft.value = { ...baseline };
+          }}
+        >
+          <UndoIcon />
+        </button>
         <button class="primary" onClick={save} disabled={!isDirty.value}>
           Save
         </button>
