@@ -43,7 +43,7 @@ services:
       - -c
       - |
         bun build src/web/main.tsx --outdir dist/web --target browser --sourcemap --watch &
-        exec bun --watch src/server.ts
+        exec bun --watch src/server/server.ts
 
 volumes:
   poiman-pg:

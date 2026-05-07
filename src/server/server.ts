@@ -16,9 +16,9 @@ import { authenticate } from "./auth.ts";
 import { configured as oidcConfigured, authDisabled, devMode } from "./oidc.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
-const ROOT = import.meta.dir;
-const WEB_DIST = join(ROOT, "..", "dist", "web");
-const WEB_SRC = join(ROOT, "web");
+const ROOT = import.meta.dir; // <repo>/src/server/
+const WEB_DIST = join(ROOT, "..", "..", "dist", "web"); // <repo>/dist/web/
+const WEB_SRC = join(ROOT, "..", "web"); // <repo>/src/web/
 
 // Loud warning so anyone tailing logs sees the bypass. The setting is
 // already explicit (DISABLE_AUTH=true is unambiguous in a values file);

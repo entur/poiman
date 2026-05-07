@@ -1,6 +1,6 @@
 import { sql, type Poi, type PoiInput } from "../db.ts";
 import { emailFor } from "../auth.ts";
-import { POI_TYPES, isPoiType } from "../poiTypes.ts";
+import { POI_TYPES, isPoiType } from "../../shared/poiTypes.ts";
 
 // bigserial comes back from Bun.sql as a string to preserve precision;
 // our IDs fit comfortably in Number, and the wire format is plain JSON.

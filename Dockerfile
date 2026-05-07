@@ -23,4 +23,4 @@ EXPOSE 8080
 RUN chown -R bun:bun /app
 USER bun
 
-CMD ["bun", "src/server.ts"]
+CMD ["bun", "src/server/server.ts"]

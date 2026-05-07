@@ -32,7 +32,7 @@ open http://localhost:8080
 
 `docker compose up` runs the prod-style container with `src/`, `dist/`,
 `scripts/`, `tsconfig.json`, and `package.json` bind-mounted, plus
-`bun --watch src/server.ts` for the server and `bun build --watch` for
+`bun --watch src/server/server.ts` for the server and `bun build --watch` for
 the bundle. Edits on the host trigger reloads in the container.
 
 The compose env sets `DISABLE_AUTH=true` and `NODE_ENV=development`. In
@@ -85,7 +85,7 @@ helm template helm/poiman -f helm/poiman/env/values-kub-ent-dev.yaml
 
 `common.postgres.enabled: true` provisions the CloudSQL Auth Proxy
 sidecar that connects to the instance declared in `terraform/`. Schema
-migrations run at app startup from `src/migrations/*.sql`.
+migrations run at app startup from `src/server/migrations/*.sql`.
 
 The three OIDC env vars are wired via `common.configmap.data` and set
 per-env in `helm/poiman/env/values-kub-ent-{dev,tst,prd}.yaml`. The

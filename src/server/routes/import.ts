@@ -1,7 +1,7 @@
 import { sql } from "../db.ts";
 import { emailFor } from "../auth.ts";
-import { parseNetex } from "../netex/parse.ts";
-import { POI_TYPES, isPoiType } from "../poiTypes.ts";
+import { parseNetex } from "../../shared/netex/parse.ts";
+import { POI_TYPES, isPoiType } from "../../shared/poiTypes.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

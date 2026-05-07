@@ -1,5 +1,25 @@
 # poiman conventions
 
+## Layout
+
+```
+src/
+  server/           Server-only. Runs as `bun src/server/server.ts`.
+                    Anything here can import `bun:sql`, `node:fs`, `jose`.
+                    Never import a server module from src/web/.
+  web/              Browser bundle. Built by `bun build src/web/main.tsx`.
+                    Reads from `/api/*` and `/config.json`. No `node:*`,
+                    no Bun runtime APIs, no DB.
+  shared/           Pure TS used by both sides (POI types, NeTEx parse +
+                    serialize). Must work in either runtime.
+```
+
+A `bun:test` in `src/web/bundle.test.ts` fails if a server-only symbol
+slips into the browser bundle. Keep it green.
+
+`src/server/oidc.ts` reads `process.env`; the SPA gets the same config
+via `GET /config.json`, never the module directly.
+
 ## Stack
 
 - Bun >= 1.2 (uses `Bun.sql` for postgres). Do not introduce `pg`,
@@ -17,14 +37,14 @@
 
 ## NeTEx output is load-bearing
 
-`src/netex/serialize.ts` produces a NeTEx 1.5 PublicationDelivery that
+`src/shared/netex/serialize.ts` produces a NeTEx 1.5 PublicationDelivery that
 is consumed by `nominatim-converter` (Rust, in this repo) and by the
 photon import pipeline.
 
 Rules:
 
 - The serializer has a byte-for-byte golden test against
-  `src/netex/__fixtures__/three_pois.xml`. The fixture is shared with the
+  `src/shared/netex/__fixtures__/three_pois.xml`. The fixture is shared with the
   parser test. If the upstream consumer changes its schema expectations,
   update the fixture and the serializer in the same change.
 - All datetimes in the XML are wall-clock Europe/Oslo, no offset, no
@@ -38,7 +58,7 @@ Rules:
 
 ## Database
 
-- One migrations directory: `src/migrations/`. Files are applied in
+- One migrations directory: `src/server/migrations/`. Files are applied in
   filename order. New migrations go in new files; never edit applied
   migrations.
 - Soft-delete via `deleted_at`. The export, list, and single-fetch
@@ -49,13 +69,13 @@ Rules:
 poiman uses Auth0 SPA login (Authorization Code + PKCE) via Entur's
 partner front-door (`https://partner.<env>.entur.org`). The SPA gets an
 access token; the backend verifies it against Auth0's JWKS using `jose`
-in `src/auth.ts`.
+in `src/server/auth.ts`.
 
 - Frontend: `react-oidc-context`'s `<AuthProvider>` wraps the App in
   `src/web/main.tsx`. `redirect_uri` is `window.location.origin` (no
   `/callback` path). Per-env SPA `client_id` is provisioned by team
   sikkerhet and injected via the `OIDC_CLIENT_ID` env var.
-- Backend: `authenticate(req)` is called once in `src/server.ts` for
+- Backend: `authenticate(req)` is called once in `src/server/server.ts` for
   every `/api/*` path except `GET /api/export/netex` (consumed by the
   photon importer). Result is memoised per `Request` via a `WeakMap`;
   routes call `emailFor(req)` to read the email without re-verifying.

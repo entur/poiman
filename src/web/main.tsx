@@ -8,7 +8,7 @@ import {
 } from "react-oidc-context";
 import type { UserManagerSettings } from "oidc-client-ts";
 import { accessToken, onUnauthorized } from "./api.ts";
-import { POI_TYPES, type PoiType } from "../poiTypes.ts";
+import { POI_TYPES, type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
   type GeoJSONSource,
@@ -699,7 +699,7 @@ function AddressSearch({
     <div class="address-search">
       <input
         type="search"
-        placeholder="Norwegian street address"
+        placeholder="Search for address"
         value={query}
         onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         onFocus={() => results.length > 0 && setOpen(true)}
