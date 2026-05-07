@@ -17,8 +17,8 @@ import { configured as oidcConfigured, authDisabled, devMode } from "./oidc.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ROOT = import.meta.dir; // <repo>/src/server/
-const WEB_DIST = join(ROOT, "..", "..", "dist", "web"); // <repo>/dist/web/
-const WEB_SRC = join(ROOT, "..", "web"); // <repo>/src/web/
+const CLIENT_DIST = join(ROOT, "..", "..", "dist", "client"); // <repo>/dist/client/
+const CLIENT_SRC = join(ROOT, "..", "client"); // <repo>/src/client/
 
 // Loud warning so anyone tailing logs sees the bypass. The setting is
 // already explicit (DISABLE_AUTH=true is unambiguous in a values file);
@@ -176,7 +176,7 @@ async function serveStatic(pathname: string): Promise<Response> {
   if (pathname === "/" || !pathname.includes(".")) {
     return serveIndex();
   }
-  const candidate = join(WEB_DIST, pathname);
+  const candidate = join(CLIENT_DIST, pathname);
   const file = Bun.file(candidate);
   if (await file.exists()) {
     const headers: Record<string, string> = {};
@@ -187,7 +187,7 @@ async function serveStatic(pathname: string): Promise<Response> {
 }
 
 async function serveIndex(): Promise<Response> {
-  const indexPath = join(WEB_SRC, "index.html");
+  const indexPath = join(CLIENT_SRC, "index.html");
   const file = Bun.file(indexPath);
   if (!(await file.exists())) {
     return new Response("frontend not built; run `bun run build`", {

@@ -42,7 +42,7 @@ services:
       - sh
       - -c
       - |
-        bun build src/web/main.tsx --outdir dist/web --target browser --sourcemap --watch &
+        bun build src/client/main.tsx --outdir dist/client --target browser --sourcemap --watch &
         exec bun --watch src/server/server.ts
 
 volumes:

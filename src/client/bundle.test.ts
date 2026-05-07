@@ -5,12 +5,12 @@ import { join } from "node:path";
 // `src/server/`. Bun's `--target=browser` silently shims `node:*` and
 // happily bundles isomorphic-looking deps (e.g. `jose` runs in browsers
 // via WebCrypto), so a stray `import { sql } from "../server/db.ts"` in
-// `web/main.tsx` could go undetected. We bundle and assert that no
+// `client/main.tsx` could go undetected. We bundle and assert that no
 // server-only marker strings show up in the output.
 const REPO = join(import.meta.dir, "..", "..");
-const ENTRY = join(REPO, "src/web/main.tsx");
+const ENTRY = join(REPO, "src/client/main.tsx");
 
-describe("web bundle", () => {
+describe("client bundle", () => {
   test("contains no server-only references", async () => {
     const out = await Bun.build({
       entrypoints: [ENTRY],

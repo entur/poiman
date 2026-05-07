@@ -6,15 +6,15 @@
 src/
   server/           Server-only. Runs as `bun src/server/server.ts`.
                     Anything here can import `bun:sql`, `node:fs`, `jose`.
-                    Never import a server module from src/web/.
-  web/              Browser bundle. Built by `bun build src/web/main.tsx`.
+                    Never import a server module from src/client/.
+  client/           Browser bundle. Built by `bun build src/client/main.tsx`.
                     Reads from `/api/*` and `/config.json`. No `node:*`,
                     no Bun runtime APIs, no DB.
   shared/           Pure TS used by both sides (POI types, NeTEx parse +
                     serialize). Must work in either runtime.
 ```
 
-A `bun:test` in `src/web/bundle.test.ts` fails if a server-only symbol
+A `bun:test` in `src/client/bundle.test.ts` fails if a server-only symbol
 slips into the browser bundle. Keep it green.
 
 `src/server/oidc.ts` reads `process.env`; the SPA gets the same config
@@ -72,7 +72,7 @@ access token; the backend verifies it against Auth0's JWKS using `jose`
 in `src/server/auth.ts`.
 
 - Frontend: `react-oidc-context`'s `<AuthProvider>` wraps the App in
-  `src/web/main.tsx`. `redirect_uri` is `window.location.origin` (no
+  `src/client/main.tsx`. `redirect_uri` is `window.location.origin` (no
   `/callback` path). Per-env SPA `client_id` is provisioned by team
   sikkerhet and injected via the `OIDC_CLIENT_ID` env var.
 - Backend: `authenticate(req)` is called once in `src/server/server.ts` for
@@ -88,7 +88,7 @@ in `src/server/auth.ts`.
   `DISABLE_AUTH` is not `true`, the three `OIDC_*` vars must all be set
   or boot fails.
 - Token expiry: stale-token 401s trigger `signinRedirect()` (see
-  `onUnauthorized` in `src/web/api.ts`), so the user is re-authenticated
+  `onUnauthorized` in `src/client/api.ts`), so the user is re-authenticated
   rather than left on a stuck error banner.
 
 ## Tests
