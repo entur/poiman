@@ -7,7 +7,7 @@ import {
   useAuth,
 } from "react-oidc-context";
 import type { UserManagerSettings } from "oidc-client-ts";
-import { accessToken, onUnauthorized } from "./api.ts";
+import { accessToken, currentUser, onUnauthorized } from "./api.ts";
 import { type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
@@ -31,7 +31,6 @@ const notice = signal<string | null>(null);
 const pendingImport = signal<{ name: string; xml: string } | null>(null);
 const pendingDelete = signal<Poi | null>(null);
 const importing = signal(false);
-const currentUser = signal<string | null>(null);
 
 // Form draft, lifted to module scope so dirty-checking and navigation
 // blocking can read it from outside the Form component. Mutated by the
@@ -1225,27 +1224,27 @@ function AuthenticatedApp() {
     }
   }, [auth.isAuthenticated, auth.activeNavigator, auth.isLoading]);
 
-  // Mirror the live access token + user email into module-level signals so
-  // api.ts and the rest of the app can read them without hooks.
+  // Mirror the live access token, user email, and 401-handler into the
+  // module-level signals so api.ts and the rest of the app can read them
+  // without hooks. Stale token -> 401 -> signinRedirect() refreshes the
+  // access token (or re-prompts for login if the SSO session is also
+  // gone) instead of leaving the user stuck on an error banner.
   useEffect(() => {
     accessToken.value = auth.user?.access_token ?? null;
-    currentUser.value = auth.user?.profile.email ?? null;
-  }, [auth.user]);
-
-  // Stale token -> 401 -> kick the user back through the OIDC flow rather
-  // than leaving them stuck on a stuck error banner. signinRedirect() with
-  // the existing session just refreshes the access token; if the SSO
-  // session is also gone, the user logs in again.
-  useEffect(() => {
+    const email = auth.user?.profile.email ?? null;
+    currentUser.value = email;
+    if (auth.user && !email) {
+      console.warn(
+        "ID token has no `email` claim - last_edited_by will fall back to `sub`. " +
+          "Check the Auth0 client's allowed scopes and tenant rules.",
+      );
+    }
     onUnauthorized.value = () => {
       auth.signinRedirect().catch((err: unknown) => {
         console.error("re-auth failed", err);
       });
     };
-    return () => {
-      onUnauthorized.value = null;
-    };
-  }, [auth.signinRedirect]);
+  }, [auth]);
 
   if (!auth.isAuthenticated) return null;
   return <App />;

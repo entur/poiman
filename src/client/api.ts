@@ -37,10 +37,18 @@ export const accessToken = signal<string | null>(null);
 // on a stale-token error banner.
 export const onUnauthorized = signal<(() => void) | null>(null);
 
+// Email from the verified ID token's `profile` claim. Rendered in the
+// header and forwarded to the server as X-User-Email so it can stamp
+// `last_edited_by` - the partner.entur.org access token doesn't carry
+// an email claim by default. The bearer token is what authenticates;
+// this header is a display hint only.
+export const currentUser = signal<string | null>(null);
+
 function authHeaders(extra?: HeadersInit): HeadersInit {
   const h: Record<string, string> = {};
   if (extra) Object.assign(h, extra);
   if (accessToken.value) h["Authorization"] = `Bearer ${accessToken.value}`;
+  if (currentUser.value) h["X-User-Email"] = currentUser.value;
   return h;
 }
 

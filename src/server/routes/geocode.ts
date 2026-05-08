@@ -30,6 +30,7 @@ export async function geocode(req: Request): Promise<Response> {
     const res = await fetch(upstream, {
       headers: {
         "ET-Client-Name": ET_CLIENT_NAME,
+        "User-Agent": ET_CLIENT_NAME,
         Accept: "application/json",
       },
     });

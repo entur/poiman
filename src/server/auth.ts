@@ -1,5 +1,14 @@
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from "jose";
+import {
+  createRemoteJWKSet,
+  customFetch,
+  jwtVerify,
+  type JWTPayload,
+} from "jose";
 import { authority, audience, configured, authDisabled, devUser } from "./oidc.ts";
+
+// Identifies us upstream (Auth0 access logs, Entur API gateways). All
+// outbound HTTP from poiman should set this.
+const USER_AGENT = "entur-poiman";
 
 // Pin the algorithm. JOSE only enforces an allowlist when one is provided;
 // without this the verifier relies on JWKS resolver behavior to reject
@@ -9,7 +18,13 @@ const ALGORITHMS = ["RS256"];
 const ISSUERS = configured ? [authority, authority + "/"] : [];
 
 const jwks = configured
-  ? createRemoteJWKSet(new URL(`${authority}/.well-known/jwks.json`))
+  ? createRemoteJWKSet(new URL(`${authority}/.well-known/jwks.json`), {
+      [customFetch]: (url, opts) =>
+        fetch(url, {
+          ...opts,
+          headers: { ...opts?.headers, "User-Agent": USER_AGENT },
+        }),
+    })
   : null;
 
 export type AuthOk = {
@@ -24,11 +39,26 @@ export type AuthFail = {
 };
 export type AuthResult = AuthOk | AuthFail;
 
+// Looks for an email-shaped claim. Auth0 puts `email` in the ID token by
+// default; access tokens don't carry it unless a tenant rule copies it
+// across. We also try any namespaced `*/email` claim (e.g. the
+// `https://entur.io/email` style) before giving up.
 function emailFromClaims(p: JWTPayload): string | null {
   if (typeof p.email === "string") return p.email;
-  const ns = p["https://entur.io/email"];
-  if (typeof ns === "string") return ns;
+  for (const [key, val] of Object.entries(p)) {
+    if (key.endsWith("/email") && typeof val === "string") return val;
+  }
   return null;
+}
+
+// Cheap RFC-5322-ish sanity check. The X-User-Email hint is informational
+// only (the bearer is what authenticates), but we still don't want to
+// stash arbitrary garbage into `last_edited_by`.
+const EMAIL_HINT_RE = /^[^\s@]{1,128}@[^\s@]{1,128}$/;
+
+function emailFromHint(req: Request): string | null {
+  const v = req.headers.get("x-user-email")?.trim();
+  return v && EMAIL_HINT_RE.test(v) ? v : null;
 }
 
 // Verify-once cache: the server gate runs authenticate() and stashes the
@@ -69,7 +99,15 @@ async function verify(req: Request): Promise<AuthResult> {
     if (!ISSUERS.includes(iss)) {
       return { ok: false, status: 403, error: `issuer ${iss} not allowed` };
     }
-    return { ok: true, email: emailFromClaims(payload), claims: payload };
+    // Email derivation: standard claim -> namespaced claim -> SPA hint
+    // (X-User-Email, since partner.entur.org access tokens don't carry
+    // email) -> `sub` so we always have *something* identifying the
+    // editor.
+    const email =
+      emailFromClaims(payload) ??
+      emailFromHint(req) ??
+      (typeof payload.sub === "string" ? payload.sub : null);
+    return { ok: true, email, claims: payload };
   } catch (err) {
     // Don't leak jose internals to the client; log server-side, return
     // a generic message. Caller maps to status code.

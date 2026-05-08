@@ -10,8 +10,12 @@ const HEADERS = { "Content-Type": "application/json" };
 const TEST_TAG = `__TEST_${Date.now()}`;
 const createdIds: number[] = [];
 
+// Poiman-specific probe: /liveness returns the literal string "ok". A
+// generic 200 from some other process listening on :8080 (e.g. a stray
+// Spring app) would otherwise make us run route tests against the wrong
+// server.
 const reachable = await fetch(`${BASE_URL}/liveness`)
-  .then((r) => r.ok)
+  .then(async (r) => r.ok && (await r.text()).trim() === "ok")
   .catch(() => false);
 
 if (!reachable) {
