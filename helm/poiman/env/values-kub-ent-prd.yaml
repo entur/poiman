@@ -7,5 +7,4 @@ common:
   configmap:
     data:
       OIDC_AUTHORITY: https://partner.entur.org
-      OIDC_CLIENT_ID: ""
       OIDC_AUDIENCE: https://api.entur.io

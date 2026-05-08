@@ -59,14 +59,21 @@ common:
     enabled: true
     toEnv: true
     data:
-      # Auth0 / OIDC bootstrap. All three values are public; they're also
-      # echoed to the browser via /config.json so the SPA can log in.
-      # Set the env-specific values in values-kub-ent-{dev,tst,prd}.yaml.
+      # Auth0 / OIDC bootstrap. Both values are env-specific and echoed
+      # to the browser via /config.json so the SPA can log in. The third
+      # piece, OIDC_CLIENT_ID, comes from Secret Manager - see the
+      # `secrets:` block below.
       OIDC_AUTHORITY: ""
-      OIDC_CLIENT_ID: ""
       OIDC_AUDIENCE: ""
       # Set to "true" to skip Auth0 entirely - all requests are stamped
       # as `dev@local` (override via the `DEV_USER` env var). Local dev
       # sets this in docker-compose.yml; the server logs a loud WARNING
       # whenever it boots with auth disabled.
       DISABLE_AUTH: "false"
+  secrets:
+    # Per-env Auth0 SPA client_id, fetched from Secret Manager. Each
+    # GCP project (dev/tst/prd) must have a SM key named OIDC_CLIENT_ID
+    # holding the right SPA client. See terraform/ + the cutover plan
+    # in README.md.
+    oidc-credentials:
+      - OIDC_CLIENT_ID
