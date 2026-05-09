@@ -12,7 +12,7 @@ import { exportNetex } from "./routes/export.ts";
 import { importNetex } from "./routes/import.ts";
 import { config } from "./routes/config.ts";
 import { geocode } from "./routes/geocode.ts";
-import { authenticate } from "./auth.ts";
+import { authenticate, isEditor } from "./auth.ts";
 import { configured as oidcConfigured, authDisabled, devMode } from "./oidc.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -137,10 +137,15 @@ async function handle(req: Request, url: URL): Promise<Response> {
 
   // Everything else under /api/* requires a valid token. authenticate()
   // memoises per-Request, so route handlers can call emailFor(req)
-  // without re-running jwtVerify.
+  // without re-running jwtVerify. Writes additionally require the user
+  // to be on the editor allowlist; reads are open to any authenticated
+  // user.
   if (pathname.startsWith("/api/")) {
     const auth = await authenticate(req);
     if (!auth.ok) return jsonError(auth.status, auth.error);
+    if (WRITE_METHODS.has(method) && !isEditor(req)) {
+      return jsonError(403, "editor permission required");
+    }
   }
 
   if (pathname === "/api/geocode" && method === "GET") return geocode(req);

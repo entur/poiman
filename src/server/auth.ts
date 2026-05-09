@@ -4,7 +4,15 @@ import {
   jwtVerify,
   type JWTPayload,
 } from "jose";
-import { authority, audience, configured, authDisabled, devUser } from "./oidc.ts";
+import {
+  authority,
+  audience,
+  clientId,
+  configured,
+  authDisabled,
+  devUser,
+} from "./oidc.ts";
+import editorsList from "./editors.json" with { type: "json" };
 
 // Identifies us upstream (Auth0 access logs, Entur API gateways). All
 // outbound HTTP from poiman should set this.
@@ -51,16 +59,6 @@ function emailFromClaims(p: JWTPayload): string | null {
   return null;
 }
 
-// Cheap RFC-5322-ish sanity check. The X-User-Email hint is informational
-// only (the bearer is what authenticates), but we still don't want to
-// stash arbitrary garbage into `last_edited_by`.
-const EMAIL_HINT_RE = /^[^\s@]{1,128}@[^\s@]{1,128}$/;
-
-function emailFromHint(req: Request): string | null {
-  const v = req.headers.get("x-user-email")?.trim();
-  return v && EMAIL_HINT_RE.test(v) ? v : null;
-}
-
 // Verify-once cache: the server gate runs authenticate() and stashes the
 // result here keyed by Request, so routes can read the email without
 // re-running jwtVerify.
@@ -76,9 +74,7 @@ export async function authenticate(req: Request): Promise<AuthResult> {
 
 async function verify(req: Request): Promise<AuthResult> {
   // DISABLE_AUTH=true disables auth entirely and stamps every request as
-  // DEV_USER. The boot guard in server.ts refuses to start with
-  // DISABLE_AUTH=true outside NODE_ENV=development, so this can't ship
-  // accidentally.
+  // DEV_USER. A loud warning fires at boot; do not set in tst/prd.
   if (authDisabled) {
     return { ok: true, email: devUser, claims: { sub: devUser } };
   }
@@ -90,6 +86,7 @@ async function verify(req: Request): Promise<AuthResult> {
     return { ok: false, status: 401, error: "missing bearer token" };
   }
   const token = auth.slice("bearer ".length).trim();
+  let accessClaims: JWTPayload;
   try {
     const { payload } = await jwtVerify(token, jwks, {
       audience,
@@ -99,28 +96,77 @@ async function verify(req: Request): Promise<AuthResult> {
     if (!ISSUERS.includes(iss)) {
       return { ok: false, status: 403, error: `issuer ${iss} not allowed` };
     }
-    // Email derivation: standard claim -> namespaced claim -> SPA hint
-    // (X-User-Email, since partner.entur.org access tokens don't carry
-    // email) -> `sub` so we always have *something* identifying the
-    // editor.
-    const email =
-      emailFromClaims(payload) ??
-      emailFromHint(req) ??
-      (typeof payload.sub === "string" ? payload.sub : null);
-    return { ok: true, email, claims: payload };
+    accessClaims = payload;
   } catch (err) {
-    // Don't leak jose internals to the client; log server-side, return
-    // a generic message. Caller maps to status code.
-    console.warn(`jwt verify failed: ${(err as Error).message}`);
+    // Don't leak jose internals; log server-side, return a generic message.
+    console.warn(`access token verify failed: ${(err as Error).message}`);
     return { ok: false, status: 401, error: "invalid token" };
+  }
+
+  // Identity is the ID token, sent alongside the access token as
+  // X-Id-Token. It's the single source of truth for who the editor is.
+  // Returns null when the ID token is missing or doesn't pass all checks
+  // - the editor gate then refuses, and last_edited_by falls back to sub
+  // (display only).
+  const email = await verifiedEmailFromIdToken(req, accessClaims.sub);
+  return { ok: true, email, claims: accessClaims };
+}
+
+// Verify the ID token against the same JWKS but with audience = SPA
+// client_id, and require sub to match the access token's sub so a leaked
+// ID token can't be paired with someone else's access token. Returns the
+// verified email or null. Misconfigurations log a warn so we don't end
+// up silently in the sub-fallback path with editor checks quietly off.
+async function verifiedEmailFromIdToken(
+  req: Request,
+  accessSub: unknown,
+): Promise<string | null> {
+  if (!jwks) return null;
+  const idTokenStr = req.headers.get("x-id-token");
+  if (!idTokenStr) return null;
+  try {
+    const { payload } = await jwtVerify(idTokenStr, jwks, {
+      audience: clientId,
+      algorithms: ALGORITHMS,
+    });
+    const iss = typeof payload.iss === "string" ? payload.iss : "";
+    if (!ISSUERS.includes(iss)) {
+      console.warn(`id token issuer ${iss} not allowed`);
+      return null;
+    }
+    if (typeof accessSub !== "string" || payload.sub !== accessSub) {
+      console.warn("id token sub does not match access token sub");
+      return null;
+    }
+    return emailFromClaims(payload);
+  } catch (err) {
+    console.warn(`id token verify failed: ${(err as Error).message}`);
+    return null;
   }
 }
 
-// Read the authenticated email after the server gate has run. Returns
-// null only if a route is reached without going through the gate (which
-// would be a server bug); routes that allow public access should not
-// call this at all.
+// Read an identifier for the authenticated user, suitable for
+// last_edited_by display: verified email when available, otherwise the
+// access token's sub. Returns null only if a route is reached without
+// going through the gate (which would be a server bug).
 export function emailFor(req: Request): string | null {
   const r = cache.get(req);
-  return r?.ok ? r.email : null;
+  if (!r?.ok) return null;
+  if (r.email) return r.email;
+  return typeof r.claims.sub === "string" ? r.claims.sub : null;
+}
+
+// Allowlist of accounts permitted to mutate POIs. Every other authenticated
+// user is read-only. Source of truth is editors.json; update by editing
+// that file + deploy.
+const EDITORS: ReadonlySet<string> = new Set(editorsList);
+
+// Authorization gate for write endpoints. Strictly the verified email
+// from the ID token - never the sub fallback, never an unsigned header.
+// DISABLE_AUTH=true grants editor outright for local dev.
+export function isEditor(req: Request): boolean {
+  if (authDisabled) return true;
+  const r = cache.get(req);
+  if (!r?.ok || !r.email) return false;
+  return EDITORS.has(r.email);
 }

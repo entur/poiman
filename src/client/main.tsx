@@ -7,7 +7,7 @@ import {
   useAuth,
 } from "react-oidc-context";
 import type { UserManagerSettings } from "oidc-client-ts";
-import { accessToken, currentUser, onUnauthorized } from "./api.ts";
+import { accessToken, currentUser, idToken, onUnauthorized } from "./api.ts";
 import { type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
@@ -1224,13 +1224,14 @@ function AuthenticatedApp() {
     }
   }, [auth.isAuthenticated, auth.activeNavigator, auth.isLoading]);
 
-  // Mirror the live access token, user email, and 401-handler into the
-  // module-level signals so api.ts and the rest of the app can read them
-  // without hooks. Stale token -> 401 -> signinRedirect() refreshes the
-  // access token (or re-prompts for login if the SSO session is also
-  // gone) instead of leaving the user stuck on an error banner.
+  // Mirror the live access + ID tokens, the user email, and the
+  // 401-handler into module-level signals so api.ts and the rest of the
+  // app can read them without hooks. Stale token -> 401 ->
+  // signinRedirect() refreshes (or re-prompts) instead of leaving the
+  // user stuck on an error banner.
   useEffect(() => {
     accessToken.value = auth.user?.access_token ?? null;
+    idToken.value = auth.user?.id_token ?? null;
     const email = auth.user?.profile.email ?? null;
     currentUser.value = email;
     if (auth.user && !email) {
