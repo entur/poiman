@@ -27,7 +27,7 @@ export function config(): Response {
             scope: "openid profile email",
           }
         : null,
-    editors: editorsList,
+    editors: editorsList.map((e) => e.toLowerCase()),
     authDisabled,
   };
   return new Response(JSON.stringify(body), {
