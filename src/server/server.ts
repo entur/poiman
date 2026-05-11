@@ -182,12 +182,17 @@ async function serveStatic(pathname: string): Promise<Response> {
   if (pathname === "/" || !pathname.includes(".")) {
     return serveIndex();
   }
-  const candidate = join(CLIENT_DIST, pathname);
-  const file = Bun.file(candidate);
-  if (await file.exists()) {
-    const headers: Record<string, string> = {};
-    if (devMode) headers["Cache-Control"] = "no-cache, must-revalidate";
-    return new Response(file, { headers });
+  // Bundled output wins. Source-tree statics (favicon, logos, etc.) are
+  // co-located with index.html in src/client and don't go through the
+  // bundler, so fall back there. URL.pathname is normalized per spec, so
+  // `..` segments can't escape either root.
+  for (const root of [CLIENT_DIST, CLIENT_SRC]) {
+    const file = Bun.file(join(root, pathname));
+    if (await file.exists()) {
+      const headers: Record<string, string> = {};
+      if (devMode) headers["Cache-Control"] = "no-cache, must-revalidate";
+      return new Response(file, { headers });
+    }
   }
   return new Response("not found", { status: 404 });
 }
