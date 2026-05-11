@@ -2,7 +2,7 @@ common:
   env: tst
   ingress:
     host: poiman.staging.entur.io
-    trafficType: api
+    trafficType: public
   configmap:
     data:
       OIDC_AUTHORITY: https://partner.staging.entur.org
