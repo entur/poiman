@@ -11,8 +11,7 @@
     "build": "bun run build:client",
     "start": "bun src/server/server.ts",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "import-existing": "bun scripts/import-existing.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@preact/signals": "^2.9.0",

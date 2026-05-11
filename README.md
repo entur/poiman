@@ -25,56 +25,67 @@ points at.
 
 ```sh
 docker compose up -d                # postgres + poiman with hot reload
-bun install                         # for editor / on-host scripts
-bun run import-existing             # seed from ../geocoder-data/events_norway_poi.xml
+bun install                         # for editor tooling on the host
 open http://localhost:8080
 ```
 
 `docker compose up` runs the prod-style container with `src/`, `dist/`,
-`scripts/`, `tsconfig.json`, and `package.json` bind-mounted, plus
-`bun --watch src/server/server.ts` for the server and `bun build --watch` for
-the bundle. Edits on the host trigger reloads in the container.
+`tsconfig.json`, and `package.json` bind-mounted, plus
+`bun --watch src/server/server.ts` for the server and `bun build --watch`
+for the bundle. Edits on the host trigger reloads in the container.
 
-The compose env sets `DISABLE_AUTH=true` and `NODE_ENV=development`. In
-that mode auth is bypassed entirely: the backend stamps every edit as
-`dev@local`, and the SPA skips `AuthProvider`. This holds regardless
-of whether `OIDC_*` is set, so you can leave the prd values in place
-and just flip `DISABLE_AUTH` on. Override the dev email with
-`DEV_USER=alice@example.com`. The server logs a loud `WARNING` at
+By default the compose env sets `DISABLE_AUTH=true` and
+`NODE_ENV=development`. In that mode auth is bypassed entirely: the
+backend stamps every edit as `dev@local` (override via `DEV_USER`), and
+the SPA skips `AuthProvider`. The server logs a loud `WARNING` at
 startup whenever `DISABLE_AUTH=true`.
 
-The server refuses to start when `DISABLE_AUTH` is not `true` and any of
-`OIDC_AUTHORITY` / `OIDC_CLIENT_ID` / `OIDC_AUDIENCE` is missing (catches
-a half-configured prd deploy that would otherwise silently disable auth).
+To try the real Auth0 flow locally, drop a `.env` next to
+`docker-compose.yml` (see `.env.example`) with `DISABLE_AUTH=false`
+and the three `OIDC_*` vars; the dev SPA client already lists
+`http://localhost:8080` as an allowed callback. The server refuses to
+start with `DISABLE_AUTH=false` and any of `OIDC_AUTHORITY` /
+`OIDC_CLIENT_ID` / `OIDC_AUDIENCE` unset.
 
 ## Tests
 
 ```sh
-bun test            # NeTEx serializer + parser (shared fixture in __fixtures__/)
+bun test            # NeTEx serializer + parser (shared fixture), bundle audit,
+                    # and HTTP integration tests against the live compose server
 bun run typecheck
 ```
 
-There are no DB / integration tests yet; the routes are exercised manually.
+The server integration suite (`src/server/server.test.ts`) is skipped
+when nothing is reachable on port 8080, so a plain `bun test` works
+without compose running. To exercise it, `docker compose up -d` first.
 
 ## Endpoints
 
 Public:
 
 - `GET /` - SPA
-- `GET /config.json` - `{oidcConfig}` for the SPA's Auth0 setup
+- `GET /config.json` - `{oidcConfig, editors, authDisabled}` for the SPA
 - `GET /api/export/netex` - live NeTEx XML, consumed by the photon import
 - `GET /liveness` `/readiness` `/metrics`
 
-JWT-required (`Authorization: Bearer <token>`):
+Authenticated reads (`Authorization: Bearer <access>` + `X-Id-Token: <id>`):
 
 - `GET /api/pois` - list (excludes soft-deleted)
+- `GET /api/pois/:id`
+- `GET /api/geocode?q=...` - address autocomplete via Entur's geocoder
+
+Editor-only writes (same headers, plus email must be in `src/server/editors.json`):
+
 - `POST /api/pois`
-- `GET|PUT|DELETE /api/pois/:id`
+- `PUT|DELETE /api/pois/:id`
 - `POST /api/import/netex?mode=merge|replace` - upload NeTEx XML
 
-The token is validated against `${OIDC_AUTHORITY}/.well-known/jwks.json`
-with `algorithms: [RS256]`, `audience: ${OIDC_AUDIENCE}`, and `iss`
-matching `OIDC_AUTHORITY` (with or without trailing slash).
+The access token is validated against
+`${OIDC_AUTHORITY}/.well-known/jwks.json` with `algorithms: [RS256]`,
+`audience: ${OIDC_AUDIENCE}`, and `iss` matching `OIDC_AUTHORITY`. The
+ID token is verified separately with `audience: ${OIDC_CLIENT_ID}` and
+must share the access token's `sub`; its `email` claim is the verified
+identity used for `last_edited_by` and the editor allowlist check.
 
 ## Deployment
 
@@ -87,31 +98,9 @@ helm template helm/poiman -f helm/poiman/env/values-kub-ent-dev.yaml
 sidecar that connects to the instance declared in `terraform/`. Schema
 migrations run at app startup from `src/server/migrations/*.sql`.
 
-The three OIDC env vars are wired via `common.configmap.data` and set
-per-env in `helm/poiman/env/values-kub-ent-{dev,tst,prd}.yaml`. The
-per-env `OIDC_CLIENT_ID` is provisioned by team sikkerhet and pasted in
-once delivered (currently empty placeholder).
-
-## Cutover plan
-
-1. Land the CloudSQL instance:
-   `terraform -chdir=terraform init && terraform -chdir=terraform apply -var-file=env/dev.tfvars`
-   (repeat per env).
-2. Order the per-env SPA Auth0 client from team sikkerhet. Required:
-   - app: poiman
-   - allowed callback / logout / web-origin URLs: bare origins
-     (`http://localhost:8080`, `https://poiman.dev.entur.io`,
-     `https://poiman.staging.entur.io`, `https://poiman.entur.io`)
-   - grants: `authorization_code` + `refresh_token`, PKCE required
-   - audience: existing `https://api.<env>.entur.io`
-3. Paste the per-env `client_id` into the env values files.
-4. Deploy poiman to dev. Run `bun run import-existing` against the dev
-   DB. Verify `curl https://poiman.dev.entur.io/api/export/netex` diffs
-   cleanly against `events_norway_poi.xml` (modulo `PublicationTimestamp`).
-5. Promote to tst, repeat.
-6. Promote to prd, seed once.
-7. In `geocoder/photon/import/config/sources-prod.conf`, change
-   `POI_URL` from the geocoder-data raw URL to
-   `https://poiman.entur.io/api/export/netex`.
-8. Freeze `geocoder-data/events_norway_poi.xml` for one release cycle as
-   a fallback, then delete.
+`OIDC_AUTHORITY` and `OIDC_AUDIENCE` are wired via
+`common.configmap.data` per-env in
+`helm/poiman/env/values-kub-ent-{dev,tst,prd}.yaml`. The per-env
+`OIDC_CLIENT_ID` lives in Secret Manager (`OIDC_CLIENT_ID` in each GCP
+project) and is mounted via the chart's `secrets:` block as an
+`ExternalSecret`.

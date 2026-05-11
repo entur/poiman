@@ -47,7 +47,6 @@ services:
     volumes:
       - ./src:/app/src
       - ./dist:/app/dist
-      - ./scripts:/app/scripts
       - ./tsconfig.json:/app/tsconfig.json
       - ./package.json:/app/package.json
     command:
