@@ -13,8 +13,7 @@ export const audience = process.env.OIDC_AUDIENCE ?? "";
 export const configured =
   authority !== "" && clientId !== "" && audience !== "";
 
-// DISABLE_AUTH=true bypasses Auth0 entirely. Lower-cased to tolerate
-// whatever YAML-to-env coercion the Helm chart picks (`true`/`True`).
+// DISABLE_AUTH=true bypasses Auth0 entirely.
 // The boot guard in server.ts refuses to start when this is set in a
 // non-development environment.
 export const authDisabled =

@@ -1303,7 +1303,7 @@ function AuthenticatedApp() {
   accessToken.value = auth.user?.access_token ?? null;
   idToken.value = auth.user?.id_token ?? null;
   // Lower-cased to match the server's canonical form, so isEditor can
-  // compare directly against editors.json (all lower-case by convention).
+  // compare directly against editors.json.
   const email = auth.user?.profile.email?.toLowerCase() ?? null;
   currentUser.value = email;
 
