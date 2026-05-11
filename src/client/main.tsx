@@ -1302,7 +1302,9 @@ function AuthenticatedApp() {
   // unchanged values are no-ops.
   accessToken.value = auth.user?.access_token ?? null;
   idToken.value = auth.user?.id_token ?? null;
-  const email = auth.user?.profile.email ?? null;
+  // Lower-cased to match the server's canonical form, so isEditor can
+  // compare directly against editors.json (all lower-case by convention).
+  const email = auth.user?.profile.email?.toLowerCase() ?? null;
   currentUser.value = email;
 
   useEffect(() => {

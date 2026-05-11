@@ -50,11 +50,13 @@ export type AuthResult = AuthOk | AuthFail;
 // Looks for an email-shaped claim. Auth0 puts `email` in the ID token by
 // default; access tokens don't carry it unless a tenant rule copies it
 // across. We also try any namespaced `*/email` claim (e.g. the
-// `https://entur.io/email` style) before giving up.
+// `https://entur.io/email` style) before giving up. Result is lower-cased
+// so the editor allowlist and `last_edited_by` both see one canonical
+// form, regardless of how the IdP cased the claim.
 function emailFromClaims(p: JWTPayload): string | null {
-  if (typeof p.email === "string") return p.email;
+  if (typeof p.email === "string") return p.email.toLowerCase();
   for (const [key, val] of Object.entries(p)) {
-    if (key.endsWith("/email") && typeof val === "string") return val;
+    if (key.endsWith("/email") && typeof val === "string") return val.toLowerCase();
   }
   return null;
 }
@@ -158,8 +160,11 @@ export function emailFor(req: Request): string | null {
 
 // Allowlist of accounts permitted to mutate POIs. Every other authenticated
 // user is read-only. Source of truth is editors.json; update by editing
-// that file + deploy.
-const EDITORS: ReadonlySet<string> = new Set(editorsList);
+// that file + deploy. Normalised to lower case so identity providers that
+// vary case in the email claim (Auth0 occasionally does this) match cleanly.
+const EDITORS: ReadonlySet<string> = new Set(
+  editorsList.map((e) => e.toLowerCase()),
+);
 
 // Authorization gate for write endpoints. Strictly the verified email
 // from the ID token - never the sub fallback, never an unsigned header.
