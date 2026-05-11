@@ -5,27 +5,31 @@ import {
   configured,
   authDisabled,
 } from "../oidc.ts";
+import editorsList from "../editors.json" with { type: "json" };
 
 // Public bootstrap config served to the browser. The frontend fetches
-// /config.json once at startup and feeds the oidcConfig into
-// react-oidc-context's <AuthProvider>. Provider-agnostic shape
-// (matches oidc-client-ts's UserManagerSettings).
+// /config.json once at startup, feeds oidcConfig into <AuthProvider>,
+// and uses the editors list to decide whether to render the read-only
+// UI variant. The list isn't secret - it's checked into git - so
+// shipping it here saves a /api/me round-trip.
 //
-// When DISABLE_AUTH=true we return null so the SPA skips AuthProvider
-// entirely - matches the backend bypass and lets devs run with no Auth0
-// at all.
+// When DISABLE_AUTH=true we return oidcConfig: null so the SPA skips
+// AuthProvider entirely, and authDisabled: true so it treats the
+// (anonymous) user as an editor to match the backend bypass.
 export function config(): Response {
-  const body =
-    !authDisabled && configured
-      ? {
-          oidcConfig: {
+  const body = {
+    oidcConfig:
+      !authDisabled && configured
+        ? {
             authority,
             client_id: clientId,
             extraQueryParams: { audience },
             scope: "openid profile email",
-          },
-        }
-      : { oidcConfig: null };
+          }
+        : null,
+    editors: editorsList,
+    authDisabled,
+  };
   return new Response(JSON.stringify(body), {
     headers: {
       "Content-Type": "application/json",

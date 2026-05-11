@@ -7,7 +7,15 @@ import {
   useAuth,
 } from "react-oidc-context";
 import { WebStorageStateStore, type UserManagerSettings } from "oidc-client-ts";
-import { accessToken, currentUser, idToken, onUnauthorized } from "./api.ts";
+import {
+  accessToken,
+  authDisabled,
+  currentUser,
+  editors,
+  idToken,
+  isEditor,
+  onUnauthorized,
+} from "./api.ts";
 import { type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
@@ -226,6 +234,23 @@ const UndoIcon = () => (
   >
     <polyline points="1 4 1 10 7 10" />
     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </svg>
+);
+
+const EyeIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
@@ -464,6 +489,8 @@ function MapView() {
       "pois-fill",
       (e: MapMouseEvent & { features?: any[] }) => {
         if (pinning.value) return;
+        // Dragging mutates the POI; non-editors get read-only markers.
+        if (!isEditor.value) return;
         const f = e.features?.[0];
         if (!f) return;
         const id = Number((f.properties as { id: number }).id);
@@ -609,22 +636,26 @@ function Header() {
           {currentUser.value}
         </span>
       )}
-      <button
-        class="primary"
-        onClick={() => {
-          pinning.value = !pinning.value;
-        }}
-      >
-        {pinning.value ? "Cancel" : "+ Add POI"}
-      </button>
-      <button onClick={() => fileRef.current?.click()}>Import NeTEx</button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".xml,application/xml,text/xml"
-        style="display:none"
-        onChange={onPickFile}
-      />
+      {isEditor.value && (
+        <>
+          <button
+            class="primary"
+            onClick={() => {
+              pinning.value = !pinning.value;
+            }}
+          >
+            {pinning.value ? "Cancel" : "+ Add POI"}
+          </button>
+          <button onClick={() => fileRef.current?.click()}>Import NeTEx</button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xml,application/xml,text/xml"
+            style="display:none"
+            onChange={onPickFile}
+          />
+        </>
+      )}
       <a class="button" href="/api/export/netex" download>
         Download NeTEx
       </a>
@@ -667,25 +698,27 @@ function List() {
             <span class="row-actions">
               <button
                 class="row-btn"
-                title="Edit"
-                aria-label="Edit"
+                title={isEditor.value ? "Edit" : "View"}
+                aria-label={isEditor.value ? "Edit" : "View"}
                 onClick={() => {
                   requestSelect(p.id);
                   mapApi?.focus(p);
                 }}
               >
-                <PencilIcon />
+                {isEditor.value ? <PencilIcon /> : <EyeIcon />}
               </button>
-              <button
-                class="row-btn danger"
-                title="Delete"
-                aria-label="Delete"
-                onClick={() => {
-                  pendingDelete.value = p;
-                }}
-              >
-                <TrashIcon />
-              </button>
+              {isEditor.value && (
+                <button
+                  class="row-btn danger"
+                  title="Delete"
+                  aria-label="Delete"
+                  onClick={() => {
+                    pendingDelete.value = p;
+                  }}
+                >
+                  <TrashIcon />
+                </button>
+              )}
             </span>
           </div>
         </div>
@@ -806,19 +839,22 @@ function Form() {
     pendingDelete.value = sel;
   };
 
+  const ro = !isEditor.value;
   return (
     <div class="form">
-      <h3>Edit POI #{sel.id}</h3>
+      <h3>{ro ? `POI #${sel.id}` : `Edit POI #${sel.id}`}</h3>
       <label>Name</label>
       <input
         class={dirtyClass("name")}
         value={d.name}
+        readOnly={ro}
         onInput={(e) => update("name", (e.target as HTMLInputElement).value)}
       />
       <label>Type</label>
       <select
         class={dirtyClass("poi_type")}
         value={d.poi_type}
+        disabled={ro}
         onChange={(e) =>
           update("poi_type", (e.target as HTMLSelectElement).value)
         }
@@ -827,12 +863,16 @@ function Form() {
         <option value="festival">festival</option>
         <option value="event">event</option>
       </select>
-      <label>Address</label>
-      <AddressSearch
-        onPick={(label, lon, lat) => {
-          pendingAddressMove.value = { label, lon, lat };
-        }}
-      />
+      {!ro && (
+        <>
+          <label>Address</label>
+          <AddressSearch
+            onPick={(label, lon, lat) => {
+              pendingAddressMove.value = { label, lon, lat };
+            }}
+          />
+        </>
+      )}
       <label>Lon / Lat</label>
       <div class="form-pair">
         <input
@@ -841,6 +881,7 @@ function Form() {
           aria-label="Longitude"
           class={dirtyClass("longitude")}
           value={d.longitude}
+          readOnly={ro}
           onInput={(e) =>
             update("longitude", Number((e.target as HTMLInputElement).value))
           }
@@ -851,6 +892,7 @@ function Form() {
           aria-label="Latitude"
           class={dirtyClass("latitude")}
           value={d.latitude}
+          readOnly={ro}
           onInput={(e) =>
             update("latitude", Number((e.target as HTMLInputElement).value))
           }
@@ -863,6 +905,7 @@ function Form() {
           aria-label="Valid from"
           class={dirtyClass("valid_from")}
           value={d.valid_from}
+          readOnly={ro}
           onInput={(e) =>
             update("valid_from", (e.target as HTMLInputElement).value)
           }
@@ -872,22 +915,24 @@ function Form() {
           aria-label="Valid to"
           class={dirtyClass("valid_to")}
           value={d.valid_to}
+          readOnly={ro}
           onInput={(e) =>
             update("valid_to", (e.target as HTMLInputElement).value)
           }
         />
       </div>
-      <div class="actions">
-        <button class="primary" onClick={save} disabled={!isDirty.value}>
-          Save
-        </button>
-        <button class="danger" onClick={remove}>
-          Delete
-        </button>
-        <button class="ghost" onClick={() => requestSelect(null)}>
-          Close
-        </button>
-        <button
+      {!ro && (
+        <div class="actions">
+          <button class="primary" onClick={save} disabled={!isDirty.value}>
+            Save
+          </button>
+          <button class="danger" onClick={remove}>
+            Delete
+          </button>
+          <button class="ghost" onClick={() => requestSelect(null)}>
+            Close
+          </button>
+          <button
             class="icon-btn"
             title="Discard unsaved changes"
             aria-label="Discard unsaved changes"
@@ -895,10 +940,11 @@ function Form() {
             onClick={() => {
               draft.value = { ...baseline };
             }}
-        >
-          <UndoIcon />
-        </button>
-      </div>
+          >
+            <UndoIcon />
+          </button>
+        </div>
+      )}
       <div class="form-meta">
         {sel.last_edited_by ? (
           <>
@@ -1266,8 +1312,12 @@ async function bootstrap(): Promise<void> {
   try {
     const cfg = (await fetch("/config.json").then((r) => r.json())) as {
       oidcConfig: UserManagerSettings | null;
+      editors: string[];
+      authDisabled: boolean;
     };
     oidcConfig = cfg.oidcConfig;
+    editors.value = cfg.editors;
+    authDisabled.value = cfg.authDisabled;
   } catch (err) {
     console.error("failed to load /config.json", err);
   }

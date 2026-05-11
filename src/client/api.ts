@@ -1,4 +1,4 @@
-import { signal } from "@preact/signals";
+import { computed, signal } from "@preact/signals";
 
 export type Poi = {
   id: number;
@@ -46,6 +46,19 @@ export const idToken = signal<string | null>(null);
 // Email from the ID token, rendered in the header. Display only - the
 // server doesn't trust this; it verifies the ID token itself.
 export const currentUser = signal<string | null>(null);
+
+// Editor allowlist + DISABLE_AUTH flag, both supplied by /config.json
+// at bootstrap. Mirror the server-side decision so the SPA can render
+// the read-only variant for non-editors. The server enforces the same
+// rule regardless - this is purely a UX hint.
+export const editors = signal<readonly string[]>([]);
+export const authDisabled = signal(false);
+
+export const isEditor = computed(() => {
+  if (authDisabled.value) return true;
+  const email = currentUser.value;
+  return email !== null && editors.value.includes(email);
+});
 
 function authHeaders(extra?: HeadersInit): HeadersInit {
   const h: Record<string, string> = {};
