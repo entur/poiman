@@ -8,7 +8,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - poiman-pg:/var/lib/postgresql/data
+      # postgres:18+ stores data in a major-version subdirectory of
+      # /var/lib/postgresql (so pg_upgrade works inside the mount), so
+      # mount the volume one level up instead of at .../data.
+      - poiman-pg:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U poiman"]
       interval: 2s
@@ -23,10 +26,19 @@ services:
     environment:
       DATABASE_URL: postgres://poiman:poiman@postgres:5432/poiman
       PORT: 8080
-      DISABLE_AUTH: "true"
-      # Override the image's NODE_ENV=production so the boot guard
-      # against DISABLE_AUTH=true doesn't fire in local dev.
       NODE_ENV: development
+      # DISABLE_AUTH=true short-circuits Auth0 and stamps every request
+      # as `dev@local`. To test the real Auth0 flow locally, drop a .env
+      # next to this file with:
+      #   DISABLE_AUTH=false
+      #   OIDC_AUTHORITY=https://partner.dev.entur.org
+      #   OIDC_AUDIENCE=https://api.dev.entur.io
+      #   OIDC_CLIENT_ID=<dev SPA client id from Secret Manager>
+      # The dev Auth0 client already allows http://localhost:8080.
+      DISABLE_AUTH: ${DISABLE_AUTH:-true}
+      OIDC_AUTHORITY: ${OIDC_AUTHORITY:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
     ports:
       - "8080:8080"
     # Bind-mount the source so `bun --watch` and `bun build --watch`
