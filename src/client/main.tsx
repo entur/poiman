@@ -14,6 +14,7 @@ import {
   editors,
   idToken,
   isEditor,
+  onLogout,
   onUnauthorized,
 } from "./api.ts";
 import { type PoiType } from "../shared/poiTypes.ts";
@@ -426,16 +427,19 @@ function MapView() {
           "circle-stroke-color": "#111827",
         },
       });
-      // Once data lands, fit the camera to all POIs (one-time, only if
-      // we've been showing the default view).
-      const fitOnce = effect(() => {
+      // Fit the camera to all POIs the first time data lands.
+      // initialFitDone gates this so it runs exactly once per mount;
+      // we don't bother disposing the effect since MapView lives for
+      // the app's lifetime. (Self-disposing here would TDZ: when the
+      // body runs synchronously the first time, the const holding the
+      // effect's dispose hasn't been assigned yet.)
+      effect(() => {
         const list = pois.value;
         if (list.length === 0 || initialFitDone.current) return;
         initialFitDone.current = true;
         const b = new maplibregl.LngLatBounds();
         for (const p of list) b.extend([p.longitude, p.latitude]);
         map.fitBounds(b, { padding: 40, maxZoom: 12, duration: 0 });
-        fitOnce();
       });
     });
 
@@ -632,9 +636,20 @@ function Header() {
       <span class="status">{pois.value.length} POIs</span>
       <span class="spacer" />
       {currentUser.value && (
-        <span class="status user" title="Signed in as">
-          {currentUser.value}
-        </span>
+        <>
+          <span class="status user" title="Signed in as">
+            {currentUser.value}
+          </span>
+          {onLogout.value && (
+            <button
+              class="ghost"
+              title="Sign out"
+              onClick={() => onLogout.value?.()}
+            >
+              Logout
+            </button>
+          )}
+        </>
       )}
       {isEditor.value && (
         <>
@@ -1277,16 +1292,20 @@ function AuthenticatedApp() {
     }
   }, [auth.isAuthenticated, auth.activeNavigator, auth.isLoading, auth.error]);
 
-  // Mirror the live access + ID tokens, the user email, and the
-  // 401-handler into module-level signals so api.ts and the rest of the
-  // app can read them without hooks. Stale token -> 401 ->
-  // signinRedirect() refreshes (or re-prompts) instead of leaving the
-  // user stuck on an error banner.
+  // Mirror access + ID tokens and the user email synchronously in
+  // render so api.ts sees them on the same commit as <App />. Doing this
+  // in useEffect bites: effects run child-first, so App's mount-effect
+  // (refresh -> /api/pois) fires BEFORE this parent effect, the bearer
+  // is missing, the request 401s, onUnauthorized triggers a
+  // signinRedirect, and F5 always bounces through Auth0. Signal writes
+  // in render are explicitly supported by @preact/signals; writes to
+  // unchanged values are no-ops.
+  accessToken.value = auth.user?.access_token ?? null;
+  idToken.value = auth.user?.id_token ?? null;
+  const email = auth.user?.profile.email ?? null;
+  currentUser.value = email;
+
   useEffect(() => {
-    accessToken.value = auth.user?.access_token ?? null;
-    idToken.value = auth.user?.id_token ?? null;
-    const email = auth.user?.profile.email ?? null;
-    currentUser.value = email;
     if (auth.user && !email) {
       console.warn(
         "ID token has no `email` claim - last_edited_by will fall back to `sub`. " +
@@ -1298,7 +1317,12 @@ function AuthenticatedApp() {
         console.error("re-auth failed", err);
       });
     };
-  }, [auth]);
+    onLogout.value = () => {
+      auth.signoutRedirect().catch((err: unknown) => {
+        console.error("signout failed", err);
+      });
+    };
+  }, [auth, email]);
 
   if (!auth.isAuthenticated) return null;
   return <App />;

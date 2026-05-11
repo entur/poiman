@@ -37,6 +37,11 @@ export const accessToken = signal<string | null>(null);
 // on a stale-token error banner.
 export const onUnauthorized = signal<(() => void) | null>(null);
 
+// Set by main.tsx so the Header can trigger Auth0 sign-out without
+// itself depending on useAuth() (which would break in DISABLE_AUTH
+// mode where no AuthProvider is mounted).
+export const onLogout = signal<(() => void) | null>(null);
+
 // ID token mirrored alongside the access token. The access token at
 // partner.entur.org doesn't carry an `email` claim, so the server reads
 // the email from the ID token's verified claims (same JWKS, audience =
