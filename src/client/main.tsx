@@ -6,7 +6,7 @@ import {
   hasAuthParams,
   useAuth,
 } from "react-oidc-context";
-import type { UserManagerSettings } from "oidc-client-ts";
+import { WebStorageStateStore, type UserManagerSettings } from "oidc-client-ts";
 import { accessToken, currentUser, idToken, onUnauthorized } from "./api.ts";
 import { type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
@@ -1212,6 +1212,13 @@ function App() {
 function AuthenticatedApp() {
   const auth = useAuth();
   useEffect(() => {
+    // Surface auth errors (silent-renew failure, expired SSO session)
+    // instead of looping back into signinRedirect, which would mask the
+    // root cause. The user can then either retry or report what they see.
+    if (auth.error) {
+      console.error("auth error", auth.error);
+      return;
+    }
     if (
       !hasAuthParams() &&
       !auth.isAuthenticated &&
@@ -1222,7 +1229,7 @@ function AuthenticatedApp() {
         console.error("signinRedirect failed", err);
       });
     }
-  }, [auth.isAuthenticated, auth.activeNavigator, auth.isLoading]);
+  }, [auth.isAuthenticated, auth.activeNavigator, auth.isLoading, auth.error]);
 
   // Mirror the live access + ID tokens, the user email, and the
   // 401-handler into module-level signals so api.ts and the rest of the
@@ -1279,6 +1286,12 @@ async function bootstrap(): Promise<void> {
         history.replaceState({}, document.title, location.pathname)
       }
       redirect_uri={location.origin}
+      // Persist the user across tab close and refresh; oidc-client-ts
+      // defaults to sessionStorage which is wiped when the tab closes.
+      // Trade-off: an XSS could exfiltrate tokens for off-origin reuse
+      // until they expire; the same XSS can already drive the API
+      // in-page, so the marginal risk is small for an internal tool.
+      userStore={new WebStorageStateStore({ store: localStorage })}
     >
       <AuthenticatedApp />
     </AuthProvider>,
