@@ -40,6 +40,11 @@ const notice = signal<string | null>(null);
 const pendingImport = signal<{ name: string; xml: string } | null>(null);
 const pendingDelete = signal<Poi | null>(null);
 const importing = signal(false);
+const showRecent = signal(false);
+const recentPage = signal(0);
+
+// How many entries the Recent changes dialog renders per page.
+const RECENT_PAGE_SIZE = 10;
 
 // Form draft, lifted to module scope so dirty-checking and navigation
 // blocking can read it from outside the Form component. Mutated by the
@@ -193,6 +198,20 @@ function toDateInput(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function formatRelative(iso: string, now: number): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const diff = Math.max(0, now - t);
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return new Date(iso).toLocaleDateString();
 }
 
 // Combine YYYY-MM-DD with a fixed wall-clock time and return an ISO string.
@@ -671,6 +690,14 @@ function Header() {
           />
         </>
       )}
+      <button
+        onClick={() => {
+          recentPage.value = 0;
+          showRecent.value = true;
+        }}
+      >
+        Recent changes
+      </button>
       <a class="button" href="/api/export/netex" download>
         Download NeTEx
       </a>
@@ -1181,6 +1208,94 @@ function AddressMoveDialog() {
   );
 }
 
+function RecentChangesDialog() {
+  if (!showRecent.value) return null;
+  const close = () => {
+    showRecent.value = false;
+  };
+  const now = Date.now();
+  const sorted = [...pois.value].sort(
+    (a, b) =>
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+  );
+  const total = sorted.length;
+  const pageCount = Math.max(1, Math.ceil(total / RECENT_PAGE_SIZE));
+  // Clamp without writing back during render; the button handlers always
+  // produce a valid page, but pois mutations under us could shrink the list.
+  const page = Math.min(recentPage.value, pageCount - 1);
+  const start = page * RECENT_PAGE_SIZE;
+  const rows = sorted.slice(start, start + RECENT_PAGE_SIZE);
+  const pick = (p: Poi) => {
+    showRecent.value = false;
+    requestSelect(p.id);
+    mapApi?.focus(p);
+  };
+  return (
+    <div class="modal-backdrop" onClick={close}>
+      <div class="modal" onClick={(e) => e.stopPropagation()}>
+        <button
+          class="modal-close"
+          type="button"
+          aria-label="Close"
+          onClick={close}
+        >
+          {"×"}
+        </button>
+        <h2>Recent changes</h2>
+        {total === 0 ? (
+          <p>No POIs yet.</p>
+        ) : (
+          <>
+            <div class="recent-list">
+              {rows.map((p) => {
+                const sameAsCreate = p.updated_at === p.created_at;
+                const who = p.last_edited_by ?? p.created_by ?? "unknown";
+                return (
+                  <button
+                    type="button"
+                    key={p.id}
+                    class="recent-row"
+                    onClick={() => pick(p)}
+                  >
+                    <span class={`type type-${p.poi_type}`}>{p.poi_type}</span>
+                    <span class="recent-name">{p.name}</span>
+                    <span
+                      class="recent-when"
+                      title={new Date(p.updated_at).toLocaleString()}
+                    >
+                      {sameAsCreate ? "created" : "edited"}{" "}
+                      {formatRelative(p.updated_at, now)} by {who}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div class="pager">
+              <button
+                class="ghost"
+                disabled={page <= 0}
+                onClick={() => (recentPage.value = page - 1)}
+              >
+                Prev
+              </button>
+              <span class="pager-status">
+                Page {page + 1} of {pageCount} ({total} POIs)
+              </span>
+              <button
+                class="ghost"
+                disabled={page >= pageCount - 1}
+                onClick={() => (recentPage.value = page + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NavBlockDialog() {
   const target = pendingNav.value;
   if (target === undefined) return null;
@@ -1247,6 +1362,7 @@ function App() {
       else if (pendingAddressMove.value) pendingAddressMove.value = null;
       else if (pendingDelete.value) pendingDelete.value = null;
       else if (pendingImport.value && !importing.value) pendingImport.value = null;
+      else if (showRecent.value) showRecent.value = false;
       else pinning.value = false;
     };
     window.addEventListener("keydown", onKey);
@@ -1261,6 +1377,7 @@ function App() {
       <DeleteDialog />
       <AddressMoveDialog />
       <NavBlockDialog />
+      <RecentChangesDialog />
     </div>
   );
 }

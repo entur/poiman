@@ -99,7 +99,7 @@ aside.side {
   color: #6b7280;
   line-height: 1;
 }
-.list .row .type {
+.type {
   font-size: 10px;
   text-transform: uppercase;
   padding: 1px 5px;
@@ -272,12 +272,31 @@ main.map .pinning {
   z-index: 1000;
 }
 .modal {
+  position: relative;
   background: white;
   border-radius: 8px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
   width: min(480px, 92vw);
   padding: 20px 24px;
 }
+.modal-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 22px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-close:hover { background: #f3f4f6; color: #1f2937; }
 .modal h2 { margin: 0 0 8px; font-size: 18px; }
 .modal p { margin: 0 0 16px; color: #4b5563; }
 .modal code {
@@ -301,6 +320,65 @@ main.map .pinning {
 }
 .modal-options strong { display: block; margin-bottom: 2px; }
 .modal-options span { font-size: 12px; color: #6b7280; }
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+.recent-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.recent-row:hover { background: #eef2ff; }
+.recent-row .type { grid-row: 1; grid-column: 1; }
+.recent-row .recent-name {
+  grid-row: 1;
+  grid-column: 2;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.recent-row .recent-when {
+  grid-row: 2;
+  grid-column: 2;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pager button {
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  background: #e5e7eb;
+  color: #1f2937;
+}
+.pager button:hover:not(:disabled) { filter: brightness(1.05); }
+.pager button:disabled { opacity: 0.5; cursor: not-allowed; }
+.pager-status { font-size: 12px; color: #6b7280; }
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
