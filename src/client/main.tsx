@@ -651,6 +651,7 @@ function Header() {
 
   return (
     <header class="bar">
+      <img class="logo" src="/entur.png" alt="Entur" />
       <h1>poiman</h1>
       <span class="status">{pois.value.length} POIs</span>
       <span class="spacer" />

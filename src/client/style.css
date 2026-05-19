@@ -28,6 +28,7 @@ header.bar {
   color: white;
   border-bottom: 1px solid #1f2937;
 }
+header.bar .logo { height: 24px; width: auto; display: block; flex: 0 0 auto; }
 header.bar h1 { font-size: 16px; margin: 0; flex: 0 0 auto; }
 header.bar .spacer { flex: 1; }
 header.bar button, header.bar a.button {
