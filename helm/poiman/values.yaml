@@ -1,6 +1,6 @@
 common:
   app: poiman
-  shortname: poiman
+  appId: poiman
   team: team-ror
   ingress:
     enabled: true
@@ -11,15 +11,11 @@ common:
       enabled: true
       path: /metrics
       port: 8080
-    strategy:
-      type: RollingUpdate
-      rollingUpdate:
-        maxUnavailable: 0%
-        maxSurge: 25%
+    maxUnavailable: 0%
+    maxSurge: 25%
     minReadySeconds: 10
   container:
     image: <+artifacts.primary.image>
-    imagePullPolicy: Always
     cpu: 0.1
     memory: 256
     probes:
@@ -55,9 +51,11 @@ common:
           command: ["/bin/sh", "-c", "sleep 1"]
   postgres:
     enabled: true
+    memory: 64  # cloud-sql-proxy v2 sidecar; default 16 is tight under a connection pool
+    instances:
+      - secretKeyPrefix: PG  # must match terraform-google-sql-db secret_key_prefix (default PG)
   configmap:
     enabled: true
-    toEnv: true
     data:
       # Auth0 / OIDC bootstrap. Both values are env-specific and echoed
       # to the browser via /config.json so the SPA can log in. The third

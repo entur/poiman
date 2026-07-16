@@ -3,7 +3,9 @@ common:
   ingress:
     host: poiman.entur.io
     trafficType: public
-  replicas: 2
+  deployment:
+    minReplicas: 2
+    maxReplicas: 10
   configmap:
     data:
       OIDC_AUTHORITY: https://partner.entur.org
