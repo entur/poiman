@@ -23,10 +23,14 @@ body {
    `.map` land directly in the grid; the mobile layout gives it a box. */
 .content { display: contents; }
 
-/* Mobile-only affordance, hidden until the breakpoint kicks in. */
-.mobile-tabs { display: none; }
+/* Mobile-only affordances, hidden until the breakpoint kicks in. On desktop
+   the header actions flow inline as normal header items. */
+.mobile-tabs,
+.header-menu-btn { display: none; }
+.header-actions { display: contents; }
 
 header.bar {
+  position: relative;
   grid-area: header;
   display: flex;
   align-items: center;
@@ -499,41 +503,63 @@ main.map .map-status {
     flex-direction: column;
   }
 
-  /* Header sizes to its content and wraps its buttons instead of
-     overflowing off the right edge. */
+  /* Single compact row: brand + count + a menu button. The actions live in
+     a dropdown panel behind the button instead of stacking down the page. */
   header.bar {
     flex: 0 0 auto;
-    flex-wrap: wrap;
-    height: auto;
-    padding: 8px 12px;
+    height: 48px;
+    padding: 0 12px;
     gap: 8px;
   }
-  /* Break the line after the brand + count so actions start a fresh row. */
-  header.bar .spacer { flex-basis: 100%; height: 0; }
-  header.bar button,
-  header.bar a.button { padding: 6px 10px; font-size: 12px; }
-  header.bar .status.user {
-    max-width: 55vw;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .header-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    line-height: 0;
+  }
+  .header-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    z-index: 40;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    min-width: 200px;
+    padding: 10px;
+    background: #1f2937;
+    border: 1px solid #374151;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+  .header-actions.open { display: flex; }
+  .header-actions .status.user {
+    color: #d1d5db;
+    white-space: normal;
+    word-break: break-word;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #374151;
   }
 
   .mobile-tabs {
     display: flex;
     flex: 0 0 auto;
     gap: 6px;
-    padding: 0 12px 8px;
+    padding: 0 12px 6px;
     background: #111827;
   }
   .mobile-tabs button {
     flex: 1 1 0;
-    padding: 8px;
+    padding: 6px;
+    min-height: 34px;
     border: 0;
     border-radius: 4px;
     background: #374151;
     color: #d1d5db;
     font: inherit;
+    font-size: 13px;
     cursor: pointer;
   }
   .mobile-tabs button.active { background: #2563eb; color: #fff; }
@@ -592,9 +618,14 @@ main.map .map-status {
   .filters input,
   .form input { font-size: 16px; }
 
-  /* Comfortable touch targets (>=44px) for the primary controls. */
-  .mobile-tabs button,
-  .dropdown-toggle,
+  /* Compact filter controls, consistent height across the row. */
+  .filters { padding: 8px 12px; }
+  .filters input,
+  .filters .dropdown-toggle { min-height: 36px; }
+  .filters .dropdown-toggle { font-size: 13px; }
+
+  /* Menu options stay a comfortable touch size even where the closed
+     controls are compact. */
   .dropdown-option { min-height: 44px; }
   .list .row .row-btn { padding: 10px; }
   .list .row .row-actions { gap: 4px; margin-right: 0; }

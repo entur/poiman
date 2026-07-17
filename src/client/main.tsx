@@ -60,6 +60,9 @@ const isNarrow = signal(false);
   mq.addEventListener("change", (e) => (isNarrow.value = e.matches));
 }
 
+// Header action menu (collapsed behind a button on narrow screens).
+const headerMenuOpen = signal(false);
+
 // How many entries the Recent changes dialog renders per page.
 const RECENT_PAGE_SIZE = 10;
 
@@ -344,6 +347,24 @@ const ChevronIcon = () => (
     aria-hidden="true"
   >
     <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+const MenuIcon = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <line x1="3" y1="6" x2="21" y2="6" />
+    <line x1="3" y1="12" x2="21" y2="12" />
+    <line x1="3" y1="18" x2="21" y2="18" />
   </svg>
 );
 
@@ -907,6 +928,7 @@ async function createAt(lon: number, lat: number): Promise<void> {
 
 function Header() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLElement>(null);
 
   const onPickFile = async (e: Event) => {
     const input = e.target as HTMLInputElement;
@@ -916,61 +938,90 @@ function Header() {
     pendingImport.value = { name: file.name, xml: await file.text() };
   };
 
+  // Close the (mobile) action menu on an outside pointer.
+  useEffect(() => {
+    if (!headerMenuOpen.value) return;
+    const onDown = (e: MouseEvent) => {
+      if (e.target instanceof Node && !ref.current?.contains(e.target)) {
+        headerMenuOpen.value = false;
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [headerMenuOpen.value]);
+
   return (
-    <header class="bar">
+    <header class="bar" ref={ref}>
       <img class="logo" src="/entur.png" alt="Entur" />
       <h1>poiman</h1>
       <span class="status">{pois.value.length} POIs</span>
       <span class="spacer" />
-      {currentUser.value && (
-        <>
-          <span class="status user" title="Signed in as">
-            {currentUser.value}
-          </span>
-          {onLogout.value && (
-            <button
-              class="ghost"
-              title="Sign out"
-              onClick={() => onLogout.value?.()}
-            >
-              Logout
-            </button>
-          )}
-        </>
-      )}
-      {isEditor.value && (
-        <>
-          <button
-            class="primary"
-            onClick={() => {
-              pinning.value = !pinning.value;
-              // Placing a pin needs the map; surface it on mobile.
-              if (pinning.value) mobileView.value = "map";
-            }}
-          >
-            {pinning.value ? "Cancel" : "+ Add POI"}
-          </button>
-          <button onClick={() => fileRef.current?.click()}>Import NeTEx</button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xml,application/xml,text/xml"
-            style="display:none"
-            onChange={onPickFile}
-          />
-        </>
-      )}
       <button
-        onClick={() => {
-          recentPage.value = 0;
-          showRecent.value = true;
-        }}
+        class="header-menu-btn"
+        aria-label="Menu"
+        aria-expanded={headerMenuOpen.value}
+        onClick={() => (headerMenuOpen.value = !headerMenuOpen.value)}
       >
-        Recent changes
+        <MenuIcon />
       </button>
-      <a class="button" href="/api/export/netex" download>
-        Download NeTEx
-      </a>
+      {/* Inline row on desktop; a dropdown panel behind the menu button on
+          narrow screens. Any click inside closes the menu. */}
+      <div
+        class={`header-actions ${headerMenuOpen.value ? "open" : ""}`}
+        onClick={() => (headerMenuOpen.value = false)}
+      >
+        {currentUser.value && (
+          <>
+            <span class="status user" title="Signed in as">
+              {currentUser.value}
+            </span>
+            {onLogout.value && (
+              <button
+                class="ghost"
+                title="Sign out"
+                onClick={() => onLogout.value?.()}
+              >
+                Logout
+              </button>
+            )}
+          </>
+        )}
+        {isEditor.value && (
+          <>
+            <button
+              class="primary"
+              onClick={() => {
+                pinning.value = !pinning.value;
+                // Placing a pin needs the map; surface it on mobile.
+                if (pinning.value) mobileView.value = "map";
+              }}
+            >
+              {pinning.value ? "Cancel" : "+ Add POI"}
+            </button>
+            <button onClick={() => fileRef.current?.click()}>
+              Import NeTEx
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xml,application/xml,text/xml"
+              style="display:none"
+              onChange={onPickFile}
+            />
+          </>
+        )}
+        <button
+          onClick={() => {
+            recentPage.value = 0;
+            showRecent.value = true;
+          }}
+        >
+          Recent changes
+        </button>
+        <a class="button" href="/api/export/netex" download>
+          Download NeTEx
+        </a>
+      </div>
     </header>
   );
 }
@@ -1672,6 +1723,7 @@ function App() {
       else if (pendingDelete.value) pendingDelete.value = null;
       else if (pendingImport.value && !importing.value) pendingImport.value = null;
       else if (showRecent.value) showRecent.value = false;
+      else if (headerMenuOpen.value) headerMenuOpen.value = false;
       else pinning.value = false;
     };
     window.addEventListener("keydown", onKey);
