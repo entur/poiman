@@ -17,11 +17,13 @@ import {
   onLogout,
   onUnauthorized,
 } from "./api.ts";
-import { type PoiType } from "../shared/poiTypes.ts";
+import { POI_TYPES, type PoiType } from "../shared/poiTypes.ts";
 import maplibregl, {
   type Map as MlMap,
   type GeoJSONSource,
   type MapMouseEvent,
+  type MapTouchEvent,
+  type FlyToOptions,
 } from "maplibre-gl";
 import { api, type Poi } from "./api.ts";
 import "./style.css";
@@ -42,6 +44,21 @@ const pendingDelete = signal<Poi | null>(null);
 const importing = signal(false);
 const showRecent = signal(false);
 const recentPage = signal(0);
+
+// Which panel the narrow-screen layout shows. Ignored above the mobile
+// breakpoint, where the list and map are side by side.
+const mobileView = signal<"list" | "map">("map");
+
+// Keep in sync with the CSS breakpoint in style.css.
+const MOBILE_MEDIA = "(max-width: 720px)";
+
+// Reactive "is the narrow layout active" flag, driven once off matchMedia.
+const isNarrow = signal(false);
+{
+  const mq = window.matchMedia(MOBILE_MEDIA);
+  isNarrow.value = mq.matches;
+  mq.addEventListener("change", (e) => (isNarrow.value = e.matches));
+}
 
 // How many entries the Recent changes dialog renders per page.
 const RECENT_PAGE_SIZE = 10;
@@ -91,6 +108,25 @@ const visiblePois = computed(() => {
 const selectedPoi = computed(() =>
   pois.value.find((p) => p.id === selectedId.value) ?? null,
 );
+
+// POIs drawn on the map: the filtered set, plus the selected POI even when
+// the active filter would hide it - so you never end up editing a marker
+// that isn't on the map.
+const mapPois = computed(() => {
+  const rows = visiblePois.value;
+  const sel = selectedPoi.value;
+  return sel && !rows.some((p) => p.id === sel.id) ? [...rows, sel] : rows;
+});
+
+// Loading / empty / no-match message, shared by the list and the map so a
+// blank map view (the mobile default) still explains itself. null = have rows.
+const statusMessage = computed(() => {
+  if (loading.value) return "Loading...";
+  if (pois.value.length === 0)
+    return 'No POIs yet. Use "+ Add POI" or import a NeTEx file.';
+  if (visiblePois.value.length === 0) return "No POIs match the current filters.";
+  return null;
+});
 
 function draftFromPoi(p: Poi): Draft {
   return {
@@ -223,6 +259,7 @@ function fromDateInput(s: string, time: "00:00:00" | "23:59:59"): string {
   return new Date(`${s}T${time}`).toISOString();
 }
 
+
 const PencilIcon = () => (
   <svg
     width="14"
@@ -293,6 +330,191 @@ const TrashIcon = () => (
     <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
   </svg>
 );
+
+const ChevronIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
+
+// A styled, keyboard-accessible replacement for <select>. Native option
+// popups render at an OS size that mobile shrinks to near-unreadable and
+// can't be styled; this is normal DOM we control. The open menu is
+// positioned `fixed` so it isn't clipped by the edit sheet's scroll box.
+function Dropdown<T extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  disabled = false,
+  dirty = false,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  ariaLabel: string;
+  disabled?: boolean;
+  dirty?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [pos, setPos] = useState<
+    { top: number; left: number; width: number } | null
+  >(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value);
+  const selectedIndex = Math.max(
+    0,
+    options.findIndex((o) => o.value === value),
+  );
+
+  const openMenu = () => {
+    const r = toggleRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 2, left: r.left, width: r.width });
+    setActive(selectedIndex);
+    setOpen(true);
+  };
+  const close = (returnFocus = true) => {
+    setOpen(false);
+    if (returnFocus) toggleRef.current?.focus();
+  };
+  const choose = (i: number) => {
+    const o = options[i];
+    if (o) onChange(o.value);
+    close();
+  };
+
+  // Roving focus: keep the active option focused so keyboard + SR users
+  // land on it.
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current
+      ?.querySelectorAll<HTMLButtonElement>(".dropdown-option")
+      ?.[active]?.focus();
+  }, [open, active]);
+
+  // While open, close on an outside pointer or on any scroll (the fixed
+  // menu can't follow a scrolling ancestor).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target;
+      if (
+        t instanceof Node &&
+        !ref.current?.contains(t) &&
+        !menuRef.current?.contains(t)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (disabled) return;
+    if (!open) {
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+        e.preventDefault();
+        openMenu();
+      }
+      return;
+    }
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setActive((i) => Math.min(i + 1, options.length - 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setActive((i) => Math.max(i - 1, 0));
+        break;
+      case "Home":
+        e.preventDefault();
+        setActive(0);
+        break;
+      case "End":
+        e.preventDefault();
+        setActive(options.length - 1);
+        break;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        choose(active);
+        break;
+      case "Escape":
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        break;
+      case "Tab":
+        setOpen(false);
+        break;
+    }
+  };
+
+  return (
+    <div class="dropdown" ref={ref} onKeyDown={onKeyDown}>
+      <button
+        type="button"
+        ref={toggleRef}
+        class={`dropdown-toggle ${dirty ? "dirty" : ""}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={() => (open ? close() : openMenu())}
+      >
+        <span class="dropdown-label">{current?.label ?? value}</span>
+        <ChevronIcon />
+      </button>
+      {open && pos && (
+        <div
+          class="dropdown-menu"
+          role="listbox"
+          aria-label={ariaLabel}
+          ref={menuRef}
+          style={{
+            top: `${pos.top}px`,
+            left: `${pos.left}px`,
+            width: `${pos.width}px`,
+          }}
+        >
+          {options.map((o, i) => (
+            <button
+              type="button"
+              key={o.value}
+              role="option"
+              tabIndex={-1}
+              aria-selected={o.value === value}
+              class={`dropdown-option ${o.value === value ? "selected" : ""}`}
+              onClick={() => choose(i)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ---------- map ----------
 
@@ -393,7 +615,7 @@ function MapView() {
       if (!m || !styleLoaded.current) return;
       const src = m.getSource("pois") as GeoJSONSource | undefined;
       if (!src) return;
-      src.setData(toGeoJSON(pois.value, dragRef.current));
+      src.setData(toGeoJSON(mapPois.value, dragRef.current));
     };
 
     const setSelectionFilter = () => {
@@ -409,11 +631,24 @@ function MapView() {
 
     mapApi = {
       focus: (p) => {
-        map.flyTo({
+        const opts: FlyToOptions = {
           center: [p.longitude, p.latitude],
           zoom: Math.max(map.getZoom(), 13),
           speed: 1.6,
-        });
+        };
+        // On narrow screens the bottom sheet covers the lower part of the
+        // map, so bias the camera upward to keep the marker visible above
+        // it. Only set padding when needed - passing undefined trips
+        // MapLibre's padding comparison.
+        if (isNarrow.value) {
+          opts.padding = {
+            top: 0,
+            right: 0,
+            left: 0,
+            bottom: Math.round(window.innerHeight * 0.55),
+          };
+        }
+        map.flyTo(opts);
       },
     };
 
@@ -421,7 +656,7 @@ function MapView() {
       styleLoaded.current = true;
       map.addSource("pois", {
         type: "geojson",
-        data: toGeoJSON(pois.value, dragRef.current),
+        data: toGeoJSON(mapPois.value, dragRef.current),
       });
       map.addLayer({
         id: "pois-fill",
@@ -532,25 +767,51 @@ function MapView() {
         tooltip.remove();
       },
     );
-    map.on("mousemove", (e) => {
+    // Touch equivalent of the mousedown drag start. Panning is disabled for
+    // the duration so a finger-drag nudges the marker instead of the map.
+    map.on(
+      "touchstart",
+      "pois-fill",
+      (e: MapTouchEvent & { features?: any[] }) => {
+        if (pinning.value || !isEditor.value) return;
+        const f = e.features?.[0];
+        if (!f) return;
+        const id = Number((f.properties as { id: number }).id);
+        if (id !== selectedId.value) return;
+        e.preventDefault();
+        map.dragPan.disable();
+        dragRef.current = {
+          id,
+          lng: e.lngLat.lng,
+          lat: e.lngLat.lat,
+          startX: e.point.x,
+          startY: e.point.y,
+        };
+        tooltip.remove();
+      },
+    );
+    const trackDrag = (e: MapMouseEvent | MapTouchEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
       drag.lng = e.lngLat.lng;
       drag.lat = e.lngLat.lat;
       setSourceData();
-    });
+    };
+    map.on("mousemove", trackDrag);
+    map.on("touchmove", trackDrag);
     // Drag commits to the open form's draft (NOT to the API). The user
     // has to click Save to persist. If the dragged POI isn't currently
     // selected, this is a no-op for the draft - the existing GeoJSON
     // override falls away on the next sync.
-    const finishDrag = (e?: MapMouseEvent) => {
+    const finishDrag = (point?: { x: number; y: number }) => {
       const drag = dragRef.current;
       if (!drag) return;
       dragRef.current = null;
       map.getCanvas().style.cursor = "";
-      // Treat tiny mousedown/up cursor jitter as a click, not a drag.
-      const dx = (e?.point.x ?? drag.startX) - drag.startX;
-      const dy = (e?.point.y ?? drag.startY) - drag.startY;
+      map.dragPan.enable();
+      // Treat tiny down/up jitter as a click/tap, not a drag.
+      const dx = (point?.x ?? drag.startX) - drag.startX;
+      const dy = (point?.y ?? drag.startY) - drag.startY;
       const moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
       if (moved && selectedId.value === drag.id && draft.value) {
         draft.value = {
@@ -559,21 +820,24 @@ function MapView() {
           latitude: round5(drag.lat),
         };
       } else {
-        // Click (or drag of a non-selected POI) - snap the visual back.
+        // Click/tap (or drag of a non-selected POI) - snap the visual back.
         setSourceData();
       }
     };
-    map.on("mouseup", finishDrag);
+    map.on("mouseup", (e) => finishDrag(e.point));
+    map.on("touchend", (e) => finishDrag(e.point));
+    map.on("touchcancel", () => finishDrag());
     // Releasing outside the canvas should still commit/cancel.
     map.getCanvas().addEventListener("mouseleave", () => {
       if (dragRef.current) finishDrag();
     });
 
-    // Push data + selection updates whenever signals change. Also re-render
-    // when the draft's lat/lon change so address-pick / manual edits show
-    // up on the map without a save.
+    // Push data + selection updates whenever signals change. Reading
+    // mapPois subscribes to the filters (and the selected POI), so the map
+    // markers track the sidebar filters. Draft lat/lon reads keep
+    // address-pick / manual edits live on the map without a save.
     const stopSync = effect(() => {
-      void pois.value;
+      void mapPois.value;
       void draft.value;
       void selectedId.value;
       setSourceData();
@@ -606,6 +870,9 @@ function MapView() {
   return (
     <main class="map">
       <div class="map-canvas" ref={ref} />
+      {!pinning.value && statusMessage.value && (
+        <div class="map-status">{statusMessage.value}</div>
+      )}
       {pinning.value && (
         <div class="pinning">Click map to place new POI (esc to cancel)</div>
       )}
@@ -677,6 +944,8 @@ function Header() {
             class="primary"
             onClick={() => {
               pinning.value = !pinning.value;
+              // Placing a pin needs the map; surface it on mobile.
+              if (pinning.value) mobileView.value = "map";
             }}
           >
             {pinning.value ? "Cancel" : "+ Add POI"}
@@ -708,13 +977,7 @@ function Header() {
 
 function List() {
   const rows = visiblePois.value;
-  const isLoading = loading.value;
-  const total = pois.value.length;
-
-  let emptyText: string | null = null;
-  if (isLoading) emptyText = "Loading...";
-  else if (total === 0) emptyText = "No POIs yet. Use \"+ Add POI\" or import a NeTEx file.";
-  else if (rows.length === 0) emptyText = "No POIs match the current filters.";
+  const emptyText = statusMessage.value;
 
   return (
     <div class="list">
@@ -729,7 +992,21 @@ function List() {
           <div
             class="row-name"
             title="Zoom to POI"
-            onClick={() => mapApi?.focus(p)}
+            onClick={() => {
+              // On mobile the row tap is how you open a POI, so select it
+              // too; desktop keeps zoom-to and edit as separate actions.
+              if (!isNarrow.value) {
+                mapApi?.focus(p);
+                return;
+              }
+              requestSelect(p.id);
+              // Only reveal/fly the map once the selection actually commits
+              // (a dirty form routes through the confirm gate instead).
+              if (selectedId.value === p.id) {
+                mobileView.value = "map";
+                mapApi?.focus(p);
+              }
+            }}
           >
             {p.name}
           </div>
@@ -846,7 +1123,7 @@ function Form() {
 
   if (!sel || !d || !baseline) {
     return (
-      <div class="form">
+      <div class="form form-empty">
         <h3>No POI selected</h3>
         <div style="grid-column:1/-1;color:#6b7280;font-size:12px">
           Click a POI on the map or in the list to edit, or use "+ Add POI".
@@ -885,6 +1162,14 @@ function Form() {
   const ro = !isEditor.value;
   return (
     <div class="form">
+      <button
+        class="form-close"
+        type="button"
+        aria-label="Close"
+        onClick={() => requestSelect(null)}
+      >
+        {"×"}
+      </button>
       <h3>{ro ? `POI #${sel.id}` : `Edit POI #${sel.id}`}</h3>
       <label>Name</label>
       <input
@@ -894,18 +1179,14 @@ function Form() {
         onInput={(e) => update("name", (e.target as HTMLInputElement).value)}
       />
       <label>Type</label>
-      <select
-        class={dirtyClass("poi_type")}
+      <Dropdown
+        ariaLabel="Type"
         value={d.poi_type}
         disabled={ro}
-        onChange={(e) =>
-          update("poi_type", (e.target as HTMLSelectElement).value)
-        }
-      >
-        <option value="concert">concert</option>
-        <option value="festival">festival</option>
-        <option value="event">event</option>
-      </select>
+        dirty={d.poi_type !== baseline.poi_type}
+        onChange={(v) => update("poi_type", v)}
+        options={POI_TYPES.map((t) => ({ value: t, label: t }))}
+      />
       {!ro && (
         <>
           <label>Address</label>
@@ -1003,42 +1284,69 @@ function Form() {
   );
 }
 
+// Narrow-screen List/Map switch. Hidden by CSS above the breakpoint. It's a
+// pair of toggle buttons (aria-pressed), not a tablist - there are no
+// separate tabpanels, the same panes just show/hide.
+function MobileTabs() {
+  return (
+    <div class="mobile-tabs">
+      <button
+        aria-pressed={mobileView.value === "list"}
+        class={mobileView.value === "list" ? "active" : ""}
+        onClick={() => (mobileView.value = "list")}
+      >
+        List
+      </button>
+      <button
+        aria-pressed={mobileView.value === "map"}
+        class={mobileView.value === "map" ? "active" : ""}
+        onClick={() => (mobileView.value = "map")}
+      >
+        Map
+      </button>
+    </div>
+  );
+}
+
+// The filters apply to both the list and the map markers, so they live
+// outside the collapsible list panel and stay visible in every view.
+function Filters() {
+  return (
+    <div class="filters">
+      <input
+        placeholder="Search names..."
+        value={filterText.value}
+        onInput={(e) =>
+          (filterText.value = (e.target as HTMLInputElement).value)
+        }
+      />
+      <Dropdown
+        ariaLabel="Filter by type"
+        value={filterType.value}
+        onChange={(v) => (filterType.value = v)}
+        options={[
+          { value: "all", label: "All types" },
+          ...POI_TYPES.map((t) => ({ value: t, label: `${t}s` })),
+        ]}
+      />
+      <Dropdown
+        ariaLabel="Filter by time"
+        value={filterTime.value}
+        onChange={(v) => (filterTime.value = v)}
+        options={[
+          { value: "all", label: "All times" },
+          { value: "current", label: "current" },
+          { value: "future", label: "future" },
+          { value: "outdated", label: "outdated" },
+        ]}
+      />
+    </div>
+  );
+}
+
 function Sidebar() {
   return (
     <aside class="side">
-      <div class="filters">
-        <input
-          placeholder="Search names..."
-          value={filterText.value}
-          onInput={(e) =>
-            (filterText.value = (e.target as HTMLInputElement).value)
-          }
-        />
-        <select
-          value={filterType.value}
-          onChange={(e) =>
-            (filterType.value = (e.target as HTMLSelectElement)
-              .value as typeof filterType.value)
-          }
-        >
-          <option value="all">All types</option>
-          <option value="concert">concerts</option>
-          <option value="festival">festivals</option>
-          <option value="event">events</option>
-        </select>
-        <select
-          value={filterTime.value}
-          onChange={(e) =>
-            (filterTime.value = (e.target as HTMLSelectElement)
-              .value as typeof filterTime.value)
-          }
-        >
-          <option value="all">All times</option>
-          <option value="current">current</option>
-          <option value="future">future</option>
-          <option value="outdated">outdated</option>
-        </select>
-      </div>
       <List />
       <Form />
     </aside>
@@ -1369,11 +1677,38 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Track the on-screen keyboard so the fixed bottom sheet (mobile) can sit
+  // above it instead of being covered - iOS doesn't shift fixed elements.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--kb-inset", `${inset}px`);
+    };
+    onResize();
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
+  }, []);
+
   return (
-    <div class="app">
+    <div
+      class={`app mobile-${mobileView.value}${
+        selectedId.value != null ? " sheet-open" : ""
+      }`}
+    >
       <Header />
-      <Sidebar />
-      <MapView />
+      <MobileTabs />
+      <Filters />
+      <div class="content">
+        <Sidebar />
+        <MapView />
+      </div>
       <ImportDialog />
       <DeleteDialog />
       <AddressMoveDialog />
