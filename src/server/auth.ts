@@ -3,6 +3,8 @@ import {
   customFetch,
   jwtVerify,
   type JWTPayload,
+  type JWTVerifyGetKey,
+  type JWTVerifyOptions,
 } from "jose";
 import {
   authority,
@@ -114,6 +116,22 @@ async function verify(req: Request): Promise<AuthResult> {
   return { ok: true, email, claims: accessClaims };
 }
 
+// ID-token only: it's an identity assertion bound to the fresh access token
+// by the caller's sub check, not a session credential, so tolerate expiry.
+// Bounded to cap replay + avoid clock overflow.
+const ID_TOKEN_CLOCK_TOLERANCE_SEC = 60 * 60 * 24 * 30; // 30 days
+
+export function verifyToleratingExpiry(
+  token: string,
+  key: JWTVerifyGetKey,
+  opts: JWTVerifyOptions,
+) {
+  return jwtVerify(token, key, {
+    ...opts,
+    clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SEC,
+  });
+}
+
 // Verify the ID token against the same JWKS but with audience = SPA
 // client_id, and require sub to match the access token's sub so a leaked
 // ID token can't be paired with someone else's access token. Returns the
@@ -127,7 +145,7 @@ async function verifiedEmailFromIdToken(
   const idTokenStr = req.headers.get("x-id-token");
   if (!idTokenStr) return null;
   try {
-    const { payload } = await jwtVerify(idTokenStr, jwks, {
+    const { payload } = await verifyToleratingExpiry(idTokenStr, jwks, {
       audience: clientId,
       algorithms: ALGORITHMS,
     });
