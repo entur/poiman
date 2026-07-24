@@ -14,8 +14,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@preact/signals": "^2.9.4",
-    "jose": "^6.2.3",
+    "@preact/signals": "^2.10.0",
+    "jose": "^6.2.4",
     "maplibre-gl": "^5.24.0",
     "oidc-client-ts": "^3.5.0",
     "preact": "^10.29.7",
