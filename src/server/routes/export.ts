@@ -1,5 +1,5 @@
+import { type NetexPoi, serializeNetex } from "../../shared/netex/serialize.ts";
 import { sql } from "../db.ts";
-import { serializeNetex, type NetexPoi } from "../../shared/netex/serialize.ts";
 
 export async function exportNetex(): Promise<Response> {
   const rows = (await sql`

@@ -1,6 +1,12 @@
 import { join } from "node:path";
+import { authenticate, isEditor } from "./auth.ts";
 import { migrate, waitForDb } from "./db.ts";
+import { authDisabled, devMode, configured as oidcConfigured } from "./oidc.ts";
+import { config } from "./routes/config.ts";
+import { exportNetex } from "./routes/export.ts";
+import { geocode } from "./routes/geocode.ts";
 import { liveness, readiness } from "./routes/health.ts";
+import { importNetex } from "./routes/import.ts";
 import {
   createPoi,
   deletePoi,
@@ -8,12 +14,6 @@ import {
   listPois,
   updatePoi,
 } from "./routes/pois.ts";
-import { exportNetex } from "./routes/export.ts";
-import { importNetex } from "./routes/import.ts";
-import { config } from "./routes/config.ts";
-import { geocode } from "./routes/geocode.ts";
-import { authenticate, isEditor } from "./auth.ts";
-import { configured as oidcConfigured, authDisabled, devMode } from "./oidc.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const ROOT = import.meta.dir; // <repo>/src/server/
@@ -75,7 +75,7 @@ function metrics(): Response {
       `poiman_http_requests_total{method="${method}",route="${path}",status="${status}"} ${n}`,
     );
   }
-  return new Response(lines.join("\n") + "\n", {
+  return new Response(`${lines.join("\n")}\n`, {
     headers: { "Content-Type": "text/plain; version=0.0.4" },
   });
 }
@@ -132,7 +132,10 @@ async function handle(req: Request, url: URL): Promise<Response> {
     WRITE_METHODS.has(method) &&
     !contentTypeOk(req)
   ) {
-    return jsonError(415, "Content-Type must be application/json or application/xml");
+    return jsonError(
+      415,
+      "Content-Type must be application/json or application/xml",
+    );
   }
 
   // Everything else under /api/* requires a valid token. authenticate()
@@ -152,7 +155,10 @@ async function handle(req: Request, url: URL): Promise<Response> {
   if (pathname === "/api/import/netex" && method === "POST") {
     const len = Number(req.headers.get("content-length"));
     if (Number.isFinite(len) && len > MAX_IMPORT_BYTES) {
-      return jsonError(413, `payload too large (max ${MAX_IMPORT_BYTES} bytes)`);
+      return jsonError(
+        413,
+        `payload too large (max ${MAX_IMPORT_BYTES} bytes)`,
+      );
     }
     return importNetex(req);
   }

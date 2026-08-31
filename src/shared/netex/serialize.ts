@@ -26,10 +26,8 @@ export function formatOsloIso(d: Date): string {
 // XML 1.0 forbids most C0 control chars (allows TAB \x09, LF \x0A, CR \x0D).
 // Strip the rest before escaping, otherwise a stray \v in a name produces a
 // non-well-formed document.
-const XML_INVALID_CTRL_RE = new RegExp(
-  "[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]",
-  "g",
-);
+// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
+const XML_INVALID_CTRL_RE = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
 
 function escapeXml(s: string): string {
   return s
@@ -74,12 +72,12 @@ function poiBlock(p: NetexPoi): string {
   ].join("\n");
 }
 
-export function serializeNetex(pois: NetexPoi[], now: Date = new Date()): string {
+export function serializeNetex(
+  pois: NetexPoi[],
+  now: Date = new Date(),
+): string {
   const ts = formatOsloIso(now);
-  const places =
-    pois.length === 0
-      ? ""
-      : "\n" + pois.map(poiBlock).join("\n");
+  const places = pois.length === 0 ? "" : `\n${pois.map(poiBlock).join("\n")}`;
   return [
     `<?xml version='1.0' encoding='utf-8'?>`,
     `<PublicationDelivery xmlns="http://www.netex.org.uk/netex" version="1.5">`,

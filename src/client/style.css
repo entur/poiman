@@ -1,9 +1,18 @@
 @import "maplibre-gl/dist/maplibre-gl.css";
 
-* { box-sizing: border-box; }
-html, body, #root { margin: 0; padding: 0; height: 100%; }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
   color: #1f2937;
 }
@@ -21,13 +30,19 @@ body {
 
 /* Wrapper around the two panes. On desktop it dissolves so `.side` and
    `.map` land directly in the grid; the mobile layout gives it a box. */
-.content { display: contents; }
+.content {
+  display: contents;
+}
 
 /* Mobile-only affordances, hidden until the breakpoint kicks in. On desktop
    the header actions flow inline as normal header items. */
 .mobile-tabs,
-.header-menu-btn { display: none; }
-.header-actions { display: contents; }
+.header-menu-btn {
+  display: none;
+}
+.header-actions {
+  display: contents;
+}
 
 header.bar {
   position: relative;
@@ -40,10 +55,22 @@ header.bar {
   color: white;
   border-bottom: 1px solid #1f2937;
 }
-header.bar .logo { height: 24px; width: auto; display: block; flex: 0 0 auto; }
-header.bar h1 { font-size: 16px; margin: 0; flex: 0 0 auto; }
-header.bar .spacer { flex: 1; }
-header.bar button, header.bar a.button {
+header.bar .logo {
+  height: 24px;
+  width: auto;
+  display: block;
+  flex: 0 0 auto;
+}
+header.bar h1 {
+  font-size: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+header.bar .spacer {
+  flex: 1;
+}
+header.bar button,
+header.bar a.button {
   background: #374151;
   color: white;
   border: 0;
@@ -53,10 +80,21 @@ header.bar button, header.bar a.button {
   cursor: pointer;
   text-decoration: none;
 }
-header.bar button.primary { background: #2563eb; }
-header.bar button:hover, header.bar a.button:hover { filter: brightness(1.15); }
-header.bar .status { font-size: 12px; color: #9ca3af; }
-header.bar .status.user { font-size: 12px; color: #d1d5db; }
+header.bar button.primary {
+  background: #2563eb;
+}
+header.bar button:hover,
+header.bar a.button:hover {
+  filter: brightness(1.15);
+}
+header.bar .status {
+  font-size: 12px;
+  color: #9ca3af;
+}
+header.bar .status.user {
+  font-size: 12px;
+  color: #d1d5db;
+}
 
 aside.side {
   grid-area: side;
@@ -88,11 +126,18 @@ aside.side {
   font: inherit;
   min-width: 0;
 }
-.filters input { flex: 1 1 100%; }
-.filters .dropdown { flex: 1 1 0; min-width: 0; }
+.filters input {
+  flex: 1 1 100%;
+}
+.filters .dropdown {
+  flex: 1 1 0;
+  min-width: 0;
+}
 
 /* Custom dropdown (replaces <select> so option text stays legible). */
-.dropdown { position: relative; }
+.dropdown {
+  position: relative;
+}
 .dropdown-toggle {
   width: 100%;
   display: flex;
@@ -108,14 +153,23 @@ aside.side {
   text-align: left;
   cursor: pointer;
 }
-.dropdown-toggle:disabled { opacity: 0.6; cursor: not-allowed; }
-.dropdown-toggle.dirty { background: #fef3c7; border-color: #f59e0b; }
+.dropdown-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.dropdown-toggle.dirty {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
 .dropdown-toggle .dropdown-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dropdown-toggle svg { flex: 0 0 auto; color: #6b7280; }
+.dropdown-toggle svg {
+  flex: 0 0 auto;
+  color: #6b7280;
+}
 /* Positioned `fixed` (top/left/width set inline from the toggle rect) so
    the menu escapes the edit sheet's overflow clip. */
 .dropdown-menu {
@@ -142,9 +196,17 @@ aside.side {
   text-align: left;
   cursor: pointer;
 }
-.dropdown-option:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }
-.dropdown-option:hover { background: #eef2ff; }
-.dropdown-option.selected { background: #dbeafe; font-weight: 500; }
+.dropdown-option:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+.dropdown-option:hover {
+  background: #eef2ff;
+}
+.dropdown-option.selected {
+  background: #dbeafe;
+  font-weight: 500;
+}
 
 .list {
   flex: 1;
@@ -154,8 +216,12 @@ aside.side {
   padding: 4px 12px 5px;
   border-bottom: 1px solid #e5e7eb;
 }
-.list .row:hover { background: #eef2ff; }
-.list .row.selected { background: #dbeafe; }
+.list .row:hover {
+  background: #eef2ff;
+}
+.list .row.selected {
+  background: #dbeafe;
+}
 .list .row .row-name {
   font-weight: 500;
   cursor: pointer;
@@ -164,7 +230,9 @@ aside.side {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.list .row .row-name:hover { text-decoration: underline; }
+.list .row .row-name:hover {
+  text-decoration: underline;
+}
 .list .row .row-meta {
   display: flex;
   align-items: center;
@@ -181,7 +249,9 @@ aside.side {
   color: white;
   letter-spacing: 0.02em;
 }
-.list .row .dates { flex: 1; }
+.list .row .dates {
+  flex: 1;
+}
 .list .row .row-actions {
   display: inline-flex;
   gap: 0;
@@ -199,12 +269,24 @@ aside.side {
   justify-content: center;
   line-height: 0;
 }
-.list .row .row-btn:hover { background: #e5e7eb; color: #1f2937; }
-.list .row .row-btn.danger:hover { background: #fee2e2; color: #b91c1c; }
+.list .row .row-btn:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+.list .row .row-btn.danger:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
 
-.type-concert  { background: #e63946; }
-.type-festival { background: #1d4ed8; }
-.type-event    { background: #f59e0b; }
+.type-concert {
+  background: #e63946;
+}
+.type-festival {
+  background: #1d4ed8;
+}
+.type-event {
+  background: #f59e0b;
+}
 
 .form {
   position: relative;
@@ -216,8 +298,15 @@ aside.side {
   gap: 6px 8px;
   align-items: center;
 }
-.form h3 { grid-column: 1 / -1; margin: 0 0 4px; font-size: 14px; }
-.form label { color: #4b5563; font-size: 12px; }
+.form h3 {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+.form label {
+  color: #4b5563;
+  font-size: 12px;
+}
 .form input {
   padding: 4px 6px;
   border: 1px solid #d1d5db;
@@ -242,11 +331,25 @@ aside.side {
   cursor: pointer;
   font: inherit;
 }
-.form button.primary { background: #2563eb; color: white; }
-.form button.danger  { background: #dc2626; color: white; }
-.form button.ghost   { background: #e5e7eb; color: #1f2937; }
-.form button:hover:not(:disabled) { filter: brightness(1.1); }
-.form button:disabled { opacity: 0.5; cursor: not-allowed; }
+.form button.primary {
+  background: #2563eb;
+  color: white;
+}
+.form button.danger {
+  background: #dc2626;
+  color: white;
+}
+.form button.ghost {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+.form button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .form button.icon-btn {
   padding: 6px;
   background: transparent;
@@ -261,12 +364,26 @@ aside.side {
   color: #1f2937;
   filter: none;
 }
-.form .err { grid-column: 1 / -1; color: #b91c1c; font-size: 12px; }
-.form .form-pair { display: flex; gap: 6px; }
-.form .form-pair > * { flex: 1 1 0; min-width: 0; }
+.form .err {
+  grid-column: 1 / -1;
+  color: #b91c1c;
+  font-size: 12px;
+}
+.form .form-pair {
+  display: flex;
+  gap: 6px;
+}
+.form .form-pair > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
 
-.form .address-search { position: relative; }
-.form .address-search input { width: 100%; }
+.form .address-search {
+  position: relative;
+}
+.form .address-search input {
+  width: 100%;
+}
 .form .address-search .address-results {
   position: absolute;
   z-index: 30;
@@ -292,7 +409,9 @@ aside.side {
   font: inherit;
   color: inherit;
 }
-.form .address-search .address-result:hover { background: #eef2ff; }
+.form .address-search .address-result:hover {
+  background: #eef2ff;
+}
 .form .form-meta {
   grid-column: 1 / -1;
   font-size: 11px;
@@ -301,7 +420,10 @@ aside.side {
   border-top: 1px dashed #e5e7eb;
   padding-top: 6px;
 }
-.form .form-meta strong { color: #374151; font-weight: 500; }
+.form .form-meta strong {
+  color: #374151;
+  font-weight: 500;
+}
 
 main.map {
   grid-area: map;
@@ -309,23 +431,28 @@ main.map {
   overflow: hidden;
   min-height: 0;
 }
-main.map .map-canvas { width: 100%; height: 100%; }
+main.map .map-canvas {
+  width: 100%;
+  height: 100%;
+}
 main.map .pinning {
   position: absolute;
-  top: 12px; left: 12px;
+  top: 12px;
+  left: 12px;
   background: #2563eb;
   color: white;
   padding: 8px 14px;
   border-radius: 4px;
   font-size: 13px;
   z-index: 10;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 /* Centered loading / empty / no-match hint, so map view is never silently
    blank. Non-interactive so it doesn't block placing a pin. */
 main.map .map-status {
   position: absolute;
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
   max-width: 80%;
   text-align: center;
@@ -342,17 +469,26 @@ main.map .map-status {
 .banner-error,
 .banner-notice {
   position: absolute;
-  top: 60px; left: 50%;
+  top: 60px;
+  left: 50%;
   transform: translateX(-50%);
   padding: 8px 14px;
   border-radius: 4px;
   font-size: 13px;
   z-index: 20;
 }
-.banner-error  { background: #fee2e2; color: #991b1b; }
-.banner-notice { background: #dcfce7; color: #166534; }
+.banner-error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.banner-notice {
+  background: #dcfce7;
+  color: #166534;
+}
 .banner-notice + .banner-error,
-.banner-error  + .banner-notice { top: 96px; }
+.banner-error + .banner-notice {
+  top: 96px;
+}
 
 .modal-backdrop {
   position: fixed;
@@ -392,9 +528,18 @@ main.map .map-status {
   justify-content: center;
 }
 .modal-close:hover,
-.form-close:hover { background: #f3f4f6; color: #1f2937; }
-.modal h2 { margin: 0 0 8px; font-size: 18px; }
-.modal p { margin: 0 0 16px; color: #4b5563; }
+.form-close:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+.modal h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.modal p {
+  margin: 0 0 16px;
+  color: #4b5563;
+}
 .modal code {
   background: #f3f4f6;
   padding: 1px 5px;
@@ -414,8 +559,14 @@ main.map .map-status {
   border-radius: 6px;
   background: #f9fafb;
 }
-.modal-options strong { display: block; margin-bottom: 2px; }
-.modal-options span { font-size: 12px; color: #6b7280; }
+.modal-options strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.modal-options span {
+  font-size: 12px;
+  color: #6b7280;
+}
 .recent-list {
   display: flex;
   flex-direction: column;
@@ -439,8 +590,13 @@ main.map .map-status {
   font: inherit;
   color: inherit;
 }
-.recent-row:hover { background: #eef2ff; }
-.recent-row .type { grid-row: 1; grid-column: 1; }
+.recent-row:hover {
+  background: #eef2ff;
+}
+.recent-row .type {
+  grid-row: 1;
+  grid-column: 1;
+}
 .recent-row .recent-name {
   grid-row: 1;
   grid-column: 2;
@@ -471,9 +627,17 @@ main.map .map-status {
   background: #e5e7eb;
   color: #1f2937;
 }
-.pager button:hover:not(:disabled) { filter: brightness(1.05); }
-.pager button:disabled { opacity: 0.5; cursor: not-allowed; }
-.pager-status { font-size: 12px; color: #6b7280; }
+.pager button:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.pager button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pager-status {
+  font-size: 12px;
+  color: #6b7280;
+}
 
 .modal-actions {
   display: flex;
@@ -487,11 +651,25 @@ main.map .map-status {
   cursor: pointer;
   font: inherit;
 }
-.modal-actions button.primary { background: #2563eb; color: white; }
-.modal-actions button.danger  { background: #dc2626; color: white; }
-.modal-actions button.ghost   { background: #e5e7eb; color: #1f2937; }
-.modal-actions button:hover:not(:disabled) { filter: brightness(1.1); }
-.modal-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-actions button.primary {
+  background: #2563eb;
+  color: white;
+}
+.modal-actions button.danger {
+  background: #dc2626;
+  color: white;
+}
+.modal-actions button.ghost {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+.modal-actions button:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.modal-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ---------- narrow screens ---------- */
 /* Below this width the desktop two-pane grid collapses: the map fills the
@@ -534,7 +712,9 @@ main.map .map-status {
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   }
-  .header-actions.open { display: flex; }
+  .header-actions.open {
+    display: flex;
+  }
   .header-actions .status.user {
     color: #d1d5db;
     white-space: normal;
@@ -562,7 +742,10 @@ main.map .map-status {
     font-size: 13px;
     cursor: pointer;
   }
-  .mobile-tabs button.active { background: #2563eb; color: #fff; }
+  .mobile-tabs button.active {
+    background: #2563eb;
+    color: #fff;
+  }
 
   /* Filters stay pinned above both panes since they drive the map too. */
   .filters {
@@ -577,7 +760,9 @@ main.map .map-status {
     flex: 1 1 auto;
     min-height: 0;
   }
-  aside.side { display: contents; }
+  aside.side {
+    display: contents;
+  }
 
   /* Map stays mounted at full size as the background - never toggled via
      display, so MapLibre never sees a zero-size container. */
@@ -594,7 +779,9 @@ main.map .map-status {
     z-index: 5;
     background: #f9fafb;
   }
-  .app.mobile-map .list { display: none; }
+  .app.mobile-map .list {
+    display: none;
+  }
 
   .form {
     position: fixed;
@@ -612,25 +799,44 @@ main.map .map-status {
     padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
   /* No point showing the "nothing selected" placeholder as a sheet. */
-  .form.form-empty { display: none; }
+  .form.form-empty {
+    display: none;
+  }
 
   /* 16px inputs stop iOS zooming the page on focus. */
   .filters input,
-  .form input { font-size: 16px; }
+  .form input {
+    font-size: 16px;
+  }
 
   /* Compact filter controls, consistent height across the row. */
-  .filters { padding: 8px 12px; }
+  .filters {
+    padding: 8px 12px;
+  }
   .filters input,
-  .filters .dropdown-toggle { min-height: 36px; }
-  .filters .dropdown-toggle { font-size: 13px; }
+  .filters .dropdown-toggle {
+    min-height: 36px;
+  }
+  .filters .dropdown-toggle {
+    font-size: 13px;
+  }
 
   /* Menu options stay a comfortable touch size even where the closed
      controls are compact. */
-  .dropdown-option { min-height: 44px; }
-  .list .row .row-btn { padding: 10px; }
-  .list .row .row-actions { gap: 4px; margin-right: 0; }
+  .dropdown-option {
+    min-height: 44px;
+  }
+  .list .row .row-btn {
+    padding: 10px;
+  }
+  .list .row .row-actions {
+    gap: 4px;
+    margin-right: 0;
+  }
 
   /* Keep the OSM attribution visible when the sheet covers the map bottom. */
   .app.sheet-open .maplibregl-ctrl-bottom-right,
-  .app.sheet-open .maplibregl-ctrl-bottom-left { bottom: calc(60vh + 8px); }
+  .app.sheet-open .maplibregl-ctrl-bottom-left {
+    bottom: calc(60vh + 8px);
+  }
 }

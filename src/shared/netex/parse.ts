@@ -18,7 +18,7 @@ const LAT_RE = /<Latitude>([^<]+)<\/Latitude>/;
 const FROM_RE = /<FromDate>([^<]+)<\/FromDate>/;
 const TO_RE = /<ToDate>([^<]+)<\/ToDate>/;
 
-function unescape(s: string): string {
+function unescapeXml(s: string): string {
   return s
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -52,7 +52,7 @@ export function parseNetex(xml: string): ParsedPoi[] {
     const idTail = idStr ? ID_TAIL_RE.exec(idStr) : null;
     out.push({
       id: idTail ? Number(idTail[1]) : undefined,
-      name: unescape(name),
+      name: unescapeXml(name),
       poi_type,
       longitude: Math.round(longitude * 1e5) / 1e5,
       latitude: Math.round(latitude * 1e5) / 1e5,

@@ -1,20 +1,20 @@
 import {
   createRemoteJWKSet,
   customFetch,
-  jwtVerify,
   type JWTPayload,
   type JWTVerifyGetKey,
   type JWTVerifyOptions,
+  jwtVerify,
 } from "jose";
+import editorsList from "./editors.json" with { type: "json" };
 import {
-  authority,
   audience,
+  authDisabled,
+  authority,
   clientId,
   configured,
-  authDisabled,
   devUser,
 } from "./oidc.ts";
-import editorsList from "./editors.json" with { type: "json" };
 
 // Identifies us upstream (Auth0 access logs, Entur API gateways). All
 // outbound HTTP from poiman should set this.
@@ -25,7 +25,7 @@ const USER_AGENT = "entur-poiman";
 // unintended algs. RS256 is what Auth0 / partner.entur.org issues.
 const ALGORITHMS = ["RS256"];
 
-const ISSUERS = configured ? [authority, authority + "/"] : [];
+const ISSUERS = configured ? [authority, `${authority}/`] : [];
 
 const jwks = configured
   ? createRemoteJWKSet(new URL(`${authority}/.well-known/jwks.json`), {
@@ -58,7 +58,8 @@ export type AuthResult = AuthOk | AuthFail;
 function emailFromClaims(p: JWTPayload): string | null {
   if (typeof p.email === "string") return p.email.toLowerCase();
   for (const [key, val] of Object.entries(p)) {
-    if (key.endsWith("/email") && typeof val === "string") return val.toLowerCase();
+    if (key.endsWith("/email") && typeof val === "string")
+      return val.toLowerCase();
   }
   return null;
 }

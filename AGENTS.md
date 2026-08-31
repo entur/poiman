@@ -35,6 +35,24 @@ via `GET /config.json`, never the module directly.
 - Styling: a single `style.css` imported from `main.tsx`. No CSS-in-JS,
   no Tailwind.
 
+## Lint and format
+
+Biome (`biome.jsonc`) is the single formatter and linter for `src/`, and
+`bun run lint` runs in CI before typecheck. Do not add prettier or eslint.
+
+- `bun run lint` checks, `bun run lint:fix` applies the safe fixes,
+  `bun run format` formats only.
+- Biome owns formatting of `.ts`, `.tsx`, `.json` and `style.css`, at 80
+  columns, and sorts imports.
+- The recommended rules are on, minus a handful turned off in
+  `biome.jsonc` with the reason inline. `bun run lint` is expected to be
+  silent - if a rule starts firing, fix the code or turn the rule off
+  deliberately, don't let warnings accumulate.
+- Three a11y rules (`noStaticElementInteractions`,
+  `useKeyWithClickEvents`, `noLabelWithoutControl`) are off because the
+  editor UI has clickable divs and bare labels that predate the linter.
+  Re-enable one once its violations are gone.
+
 ## NeTEx output is load-bearing
 
 `src/shared/netex/serialize.ts` produces a NeTEx 1.5 PublicationDelivery that

@@ -1,14 +1,20 @@
+import { batch, computed, effect, signal } from "@preact/signals";
+import maplibregl, {
+  type FlyToOptions,
+  type GeoJSONSource,
+  type MapGeoJSONFeature,
+  type MapMouseEvent,
+  type MapTouchEvent,
+  type Map as MlMap,
+} from "maplibre-gl";
+import { type UserManagerSettings, WebStorageStateStore } from "oidc-client-ts";
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { signal, computed, effect, batch } from "@preact/signals";
-import {
-  AuthProvider,
-  hasAuthParams,
-  useAuth,
-} from "react-oidc-context";
-import { WebStorageStateStore, type UserManagerSettings } from "oidc-client-ts";
+import { AuthProvider, hasAuthParams, useAuth } from "react-oidc-context";
+import { POI_TYPES, type PoiType } from "../shared/poiTypes.ts";
 import {
   accessToken,
+  api,
   authDisabled,
   currentUser,
   editors,
@@ -16,16 +22,8 @@ import {
   isEditor,
   onLogout,
   onUnauthorized,
+  type Poi,
 } from "./api.ts";
-import { POI_TYPES, type PoiType } from "../shared/poiTypes.ts";
-import maplibregl, {
-  type Map as MlMap,
-  type GeoJSONSource,
-  type MapMouseEvent,
-  type MapTouchEvent,
-  type FlyToOptions,
-} from "maplibre-gl";
-import { api, type Poi } from "./api.ts";
 import "./style.css";
 
 // ---------- state ----------
@@ -85,7 +83,11 @@ const pendingNav = signal<number | null | undefined>(undefined);
 
 // Pending address-search pick. When set, the form shows a confirm modal
 // asking whether to move the location.
-const pendingAddressMove = signal<{ label: string; lon: number; lat: number } | null>(null);
+const pendingAddressMove = signal<{
+  label: string;
+  lon: number;
+  lat: number;
+} | null>(null);
 
 const visiblePois = computed(() => {
   const q = filterText.value.toLowerCase().trim();
@@ -108,8 +110,8 @@ const visiblePois = computed(() => {
     .sort((a, b) => a.name.localeCompare(b.name, "no"));
 });
 
-const selectedPoi = computed(() =>
-  pois.value.find((p) => p.id === selectedId.value) ?? null,
+const selectedPoi = computed(
+  () => pois.value.find((p) => p.id === selectedId.value) ?? null,
 );
 
 // POIs drawn on the map: the filtered set, plus the selected POI even when
@@ -127,7 +129,8 @@ const statusMessage = computed(() => {
   if (loading.value) return "Loading...";
   if (pois.value.length === 0)
     return 'No POIs yet. Use "+ Add POI" or import a NeTEx file.';
-  if (visiblePois.value.length === 0) return "No POIs match the current filters.";
+  if (visiblePois.value.length === 0)
+    return "No POIs match the current filters.";
   return null;
 });
 
@@ -262,7 +265,6 @@ function fromDateInput(s: string, time: "00:00:00" | "23:59:59"): string {
   return new Date(`${s}T${time}`).toISOString();
 }
 
-
 const PencilIcon = () => (
   <svg
     width="14"
@@ -389,9 +391,11 @@ function Dropdown<T extends string>({
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const [pos, setPos] = useState<
-    { top: number; left: number; width: number } | null
-  >(null);
+  const [pos, setPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -722,7 +726,7 @@ function MapView() {
     map.on(
       "mousemove",
       "pois-fill",
-      (e: MapMouseEvent & { features?: any[] }) => {
+      (e: MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
         if (pinning.value || dragRef.current) return;
         const f = e.features?.[0];
         if (!f) return;
@@ -742,7 +746,7 @@ function MapView() {
     map.on(
       "click",
       "pois-fill",
-      (e: MapMouseEvent & { features?: any[] }) => {
+      (e: MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
         if (pinning.value) return;
         const f = e.features?.[0];
         if (!f) return;
@@ -766,7 +770,7 @@ function MapView() {
     map.on(
       "mousedown",
       "pois-fill",
-      (e: MapMouseEvent & { features?: any[] }) => {
+      (e: MapMouseEvent & { features?: MapGeoJSONFeature[] }) => {
         if (pinning.value) return;
         // Dragging mutates the POI; non-editors get read-only markers.
         if (!isEditor.value) return;
@@ -793,7 +797,7 @@ function MapView() {
     map.on(
       "touchstart",
       "pois-fill",
-      (e: MapTouchEvent & { features?: any[] }) => {
+      (e: MapTouchEvent & { features?: MapGeoJSONFeature[] }) => {
         if (pinning.value || !isEditor.value) return;
         const f = e.features?.[0];
         if (!f) return;
@@ -957,6 +961,7 @@ function Header() {
       <span class="status">{pois.value.length} POIs</span>
       <span class="spacer" />
       <button
+        type="button"
         class="header-menu-btn"
         aria-label="Menu"
         aria-expanded={headerMenuOpen.value}
@@ -977,6 +982,7 @@ function Header() {
             </span>
             {onLogout.value && (
               <button
+                type="button"
                 class="ghost"
                 title="Sign out"
                 onClick={() => onLogout.value?.()}
@@ -989,6 +995,7 @@ function Header() {
         {isEditor.value && (
           <>
             <button
+              type="button"
               class="primary"
               onClick={() => {
                 pinning.value = !pinning.value;
@@ -998,7 +1005,7 @@ function Header() {
             >
               {pinning.value ? "Cancel" : "+ Add POI"}
             </button>
-            <button onClick={() => fileRef.current?.click()}>
+            <button type="button" onClick={() => fileRef.current?.click()}>
               Import NeTEx
             </button>
             <input
@@ -1011,6 +1018,7 @@ function Header() {
           </>
         )}
         <button
+          type="button"
           onClick={() => {
             recentPage.value = 0;
             showRecent.value = true;
@@ -1032,9 +1040,7 @@ function List() {
 
   return (
     <div class="list">
-      {emptyText && (
-        <div style="padding:12px;color:#9ca3af">{emptyText}</div>
-      )}
+      {emptyText && <div style="padding:12px;color:#9ca3af">{emptyText}</div>}
       {rows.map((p) => (
         <div
           key={p.id}
@@ -1068,6 +1074,7 @@ function List() {
             </span>
             <span class="row-actions">
               <button
+                type="button"
                 class="row-btn"
                 title={isEditor.value ? "Edit" : "View"}
                 aria-label={isEditor.value ? "Edit" : "View"}
@@ -1080,6 +1087,7 @@ function List() {
               </button>
               {isEditor.value && (
                 <button
+                  type="button"
                   class="row-btn danger"
                   title="Delete"
                   aria-label="Delete"
@@ -1148,8 +1156,8 @@ function AddressSearch({
         <div class="address-results">
           {results.map((r, i) => (
             <button
-              key={i}
               type="button"
+              key={i}
               class="address-result"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
@@ -1187,8 +1195,7 @@ function Form() {
     draft.value = { ...d, [k]: v };
   };
 
-  const dirtyClass = (k: keyof Draft) =>
-    d[k] !== baseline[k] ? "dirty" : "";
+  const dirtyClass = (k: keyof Draft) => (d[k] !== baseline[k] ? "dirty" : "");
 
   const save = async () => {
     try {
@@ -1214,8 +1221,8 @@ function Form() {
   return (
     <div class="form">
       <button
-        class="form-close"
         type="button"
+        class="form-close"
         aria-label="Close"
         onClick={() => requestSelect(null)}
       >
@@ -1298,16 +1305,26 @@ function Form() {
       </div>
       {!ro && (
         <div class="actions">
-          <button class="primary" onClick={save} disabled={!isDirty.value}>
+          <button
+            type="button"
+            class="primary"
+            onClick={save}
+            disabled={!isDirty.value}
+          >
             Save
           </button>
-          <button class="danger" onClick={remove}>
+          <button type="button" class="danger" onClick={remove}>
             Delete
           </button>
-          <button class="ghost" onClick={() => requestSelect(null)}>
+          <button
+            type="button"
+            class="ghost"
+            onClick={() => requestSelect(null)}
+          >
             Close
           </button>
           <button
+            type="button"
             class="icon-btn"
             title="Discard unsaved changes"
             aria-label="Discard unsaved changes"
@@ -1342,6 +1359,7 @@ function MobileTabs() {
   return (
     <div class="mobile-tabs">
       <button
+        type="button"
         aria-pressed={mobileView.value === "list"}
         class={mobileView.value === "list" ? "active" : ""}
         onClick={() => (mobileView.value = "list")}
@@ -1349,6 +1367,7 @@ function MobileTabs() {
         List
       </button>
       <button
+        type="button"
         aria-pressed={mobileView.value === "map"}
         class={mobileView.value === "map" ? "active" : ""}
         onClick={() => (mobileView.value = "map")}
@@ -1448,20 +1467,21 @@ function ImportDialog() {
           <label>
             <strong>Merge</strong>
             <span>
-              Upsert by id. Existing POIs in the file overwrite by id; POIs
-              not in the file are kept.
+              Upsert by id. Existing POIs in the file overwrite by id; POIs not
+              in the file are kept.
             </span>
           </label>
           <label>
             <strong>Replace</strong>
             <span>
-              Soft-delete every current POI first, then insert from the
-              file. Drops anything not in the file.
+              Soft-delete every current POI first, then insert from the file.
+              Drops anything not in the file.
             </span>
           </label>
         </div>
         <div class="modal-actions">
           <button
+            type="button"
             class="ghost"
             disabled={importing.value}
             onClick={cancel}
@@ -1469,6 +1489,7 @@ function ImportDialog() {
             Cancel
           </button>
           <button
+            type="button"
             class="danger"
             disabled={importing.value}
             onClick={() => run("replace")}
@@ -1476,6 +1497,7 @@ function ImportDialog() {
             Replace all
           </button>
           <button
+            type="button"
             class="primary"
             disabled={importing.value}
             onClick={() => run("merge")}
@@ -1512,15 +1534,15 @@ function DeleteDialog() {
       <div class="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Delete POI</h2>
         <p>
-          Soft-delete <strong>{target.name}</strong>? It will disappear from
-          the map and from the NeTEx export. The row stays in the database
-          and can be restored manually if needed.
+          Soft-delete <strong>{target.name}</strong>? It will disappear from the
+          map and from the NeTEx export. The row stays in the database and can
+          be restored manually if needed.
         </p>
         <div class="modal-actions">
-          <button class="ghost" onClick={cancel}>
+          <button type="button" class="ghost" onClick={cancel}>
             Cancel
           </button>
-          <button class="danger" onClick={confirm}>
+          <button type="button" class="danger" onClick={confirm}>
             Delete
           </button>
         </div>
@@ -1552,14 +1574,14 @@ function AddressMoveDialog() {
       <div class="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Move location</h2>
         <p>
-          Move <strong>{sel.name}</strong> to <code>{pick.label}</code>?
-          The change is staged in the form; click Save to persist.
+          Move <strong>{sel.name}</strong> to <code>{pick.label}</code>? The
+          change is staged in the form; click Save to persist.
         </p>
         <div class="modal-actions">
-          <button class="ghost" onClick={cancel}>
+          <button type="button" class="ghost" onClick={cancel}>
             Cancel
           </button>
-          <button class="primary" onClick={apply}>
+          <button type="button" class="primary" onClick={apply}>
             Move here
           </button>
         </div>
@@ -1594,8 +1616,8 @@ function RecentChangesDialog() {
     <div class="modal-backdrop" onClick={close}>
       <div class="modal" onClick={(e) => e.stopPropagation()}>
         <button
-          class="modal-close"
           type="button"
+          class="modal-close"
           aria-label="Close"
           onClick={close}
         >
@@ -1632,6 +1654,7 @@ function RecentChangesDialog() {
             </div>
             <div class="pager">
               <button
+                type="button"
                 class="ghost"
                 disabled={page <= 0}
                 onClick={() => (recentPage.value = page - 1)}
@@ -1642,6 +1665,7 @@ function RecentChangesDialog() {
                 Page {page + 1} of {pageCount} ({total} POIs)
               </span>
               <button
+                type="button"
                 class="ghost"
                 disabled={page >= pageCount - 1}
                 onClick={() => (recentPage.value = page + 1)}
@@ -1698,13 +1722,13 @@ function NavBlockDialog() {
           away, discard them, or stay on the current POI.
         </p>
         <div class="modal-actions">
-          <button class="ghost" onClick={cancel}>
+          <button type="button" class="ghost" onClick={cancel}>
             Stay
           </button>
-          <button class="danger" onClick={discard}>
+          <button type="button" class="danger" onClick={discard}>
             Discard
           </button>
-          <button class="primary" onClick={saveAndGo}>
+          <button type="button" class="primary" onClick={saveAndGo}>
             Save and continue
           </button>
         </div>
@@ -1721,7 +1745,8 @@ function App() {
       if (pendingNav.value !== undefined) pendingNav.value = undefined;
       else if (pendingAddressMove.value) pendingAddressMove.value = null;
       else if (pendingDelete.value) pendingDelete.value = null;
-      else if (pendingImport.value && !importing.value) pendingImport.value = null;
+      else if (pendingImport.value && !importing.value)
+        pendingImport.value = null;
       else if (showRecent.value) showRecent.value = false;
       else if (headerMenuOpen.value) headerMenuOpen.value = false;
       else pinning.value = false;

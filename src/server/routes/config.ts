@@ -1,11 +1,11 @@
+import editorsList from "../editors.json" with { type: "json" };
 import {
+  audience,
+  authDisabled,
   authority,
   clientId,
-  audience,
   configured,
-  authDisabled,
 } from "../oidc.ts";
-import editorsList from "../editors.json" with { type: "json" };
 
 // Public bootstrap config served to the browser. The frontend fetches
 // /config.json once at startup, feeds oidcConfig into <AuthProvider>,

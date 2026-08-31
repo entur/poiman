@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { POI_TYPES, isPoiType } from "./poiTypes.ts";
+import { isPoiType, POI_TYPES } from "./poiTypes.ts";
 
 describe("POI_TYPES", () => {
   test("contains the three known types", () => {

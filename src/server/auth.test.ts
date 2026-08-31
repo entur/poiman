@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { SignJWT, generateKeyPair } from "jose";
+import { generateKeyPair, SignJWT } from "jose";
 import { verifyToleratingExpiry } from "./auth.ts";
 
 const nowSec = () => Math.floor(Date.now() / 1000);
@@ -30,7 +30,11 @@ describe("verifyToleratingExpiry", () => {
       { email: "Henrik@Entur.org", sub: "auth0|123" },
       nowSec() - 3600, // expired an hour ago
     );
-    const { payload } = await verifyToleratingExpiry(token, () => publicKey, opts);
+    const { payload } = await verifyToleratingExpiry(
+      token,
+      () => publicKey,
+      opts,
+    );
     expect(payload.email).toBe("Henrik@Entur.org");
     expect(payload.sub).toBe("auth0|123");
   });
@@ -38,7 +42,11 @@ describe("verifyToleratingExpiry", () => {
   test("accepts a still-valid token unchanged", async () => {
     const { privateKey, publicKey } = await generateKeyPair("RS256");
     const token = await sign(privateKey, { sub: "s" }, nowSec() + 3600);
-    const { payload } = await verifyToleratingExpiry(token, () => publicKey, opts);
+    const { payload } = await verifyToleratingExpiry(
+      token,
+      () => publicKey,
+      opts,
+    );
     expect(payload.sub).toBe("s");
   });
 

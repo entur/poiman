@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { formatOsloIso, serializeNetex, type NetexPoi } from "./serialize.ts";
+import { formatOsloIso, type NetexPoi, serializeNetex } from "./serialize.ts";
 
 const FIXTURE = join(import.meta.dir, "__fixtures__/three_pois.xml");
 
@@ -80,6 +80,8 @@ describe("serializeNetex", () => {
     const xml = serializeNetex([], new Date("2026-01-01T00:00:00+01:00"));
     expect(xml).toContain("<topographicPlaces>");
     expect(xml).toContain("</topographicPlaces>");
-    expect(xml).toContain("<PublicationTimestamp>2026-01-01T00:00:00</PublicationTimestamp>");
+    expect(xml).toContain(
+      "<PublicationTimestamp>2026-01-01T00:00:00</PublicationTimestamp>",
+    );
   });
 });

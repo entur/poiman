@@ -13,9 +13,7 @@ describe("parseNetex", () => {
 
     const first = rows[0]!;
     expect(first.id).toBe(1);
-    expect(first.name).toBe(
-      "FOO FIGHTERS Live på Unity Arena, Oslo 10. juni",
-    );
+    expect(first.name).toBe("FOO FIGHTERS Live på Unity Arena, Oslo 10. juni");
     expect(first.poi_type).toBe("concert");
     expect(first.longitude).toBe(10.62535);
     expect(first.latitude).toBe(59.90268);

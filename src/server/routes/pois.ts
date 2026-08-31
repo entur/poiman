@@ -1,6 +1,6 @@
-import { sql, type Poi, type PoiInput } from "../db.ts";
+import { isPoiType, POI_TYPES } from "../../shared/poiTypes.ts";
 import { emailFor } from "../auth.ts";
-import { POI_TYPES, isPoiType } from "../../shared/poiTypes.ts";
+import { type Poi, type PoiInput, sql } from "../db.ts";
 
 // bigserial comes back from Bun.sql as a string to preserve precision;
 // our IDs fit comfortably in Number, and the wire format is plain JSON.
@@ -39,7 +39,8 @@ function err(status: number, message: string): Response {
 function parseInput(raw: unknown): PoiInput | string {
   if (!raw || typeof raw !== "object") return "body must be an object";
   const r = raw as Record<string, unknown>;
-  if (typeof r.name !== "string" || r.name.trim() === "") return "name required";
+  if (typeof r.name !== "string" || r.name.trim() === "")
+    return "name required";
   if (!isPoiType(r.poi_type))
     return `poi_type must be one of ${POI_TYPES.join(", ")}`;
   if (typeof r.longitude !== "number" || !Number.isFinite(r.longitude))

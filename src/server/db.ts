@@ -1,6 +1,6 @@
-import { SQL } from "bun";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { SQL } from "bun";
 
 export type Poi = {
   id: number;

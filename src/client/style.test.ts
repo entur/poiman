@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-// The stylesheet is hand-authored with no CSS linter, and a single stray
-// brace makes the parser discard rules to the next valid selector - which
-// once silently dropped the whole responsive @media block while the build
-// still "succeeded". These guard that class of failure.
+// A single stray brace makes the CSS parser discard rules to the next valid
+// selector - which once silently dropped the whole responsive @media block
+// while the build still "succeeded". Biome now formats the stylesheet, but
+// these guard that class of failure at build time.
 const REPO = join(import.meta.dir, "..", "..");
 const CSS = join(REPO, "src/client/style.css");
 const ENTRY = join(REPO, "src/client/main.tsx");
