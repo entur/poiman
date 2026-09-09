@@ -19,7 +19,9 @@ services:
       retries: 10
 
   poiman:
-    build: .
+    build:
+      context: .
+      target: dev  # shell-bearing stage; the distroless prod image has no sh
     depends_on:
       postgres:
         condition: service_healthy

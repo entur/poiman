@@ -47,8 +47,10 @@ common:
           failureThreshold: 3
     lifecycle:
       preStop:
-        exec:
-          command: ["/bin/sh", "-c", "sleep 1"]
+        # Native sleep handler (k8s 1.30+): the distroless image has no /bin/sh
+        # for an exec hook. Allows time for connections to drain before SIGTERM.
+        sleep:
+          seconds: 1
   postgres:
     enabled: true
     memory: 64  # cloud-sql-proxy v2 sidecar; default 16 is tight under a connection pool
