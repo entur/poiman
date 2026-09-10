@@ -47,10 +47,11 @@ common:
           failureThreshold: 3
     lifecycle:
       preStop:
-        # Native sleep handler (k8s 1.30+): the distroless image has no /bin/sh
-        # for an exec hook. Allows time for connections to drain before SIGTERM.
+        # Native SleepAction (distroless has no shell). Drain from endpoints
+        # before SIGTERM so client connections aren't cut on rollout. Fits the
+        # default 30s grace.
         sleep:
-          seconds: 1
+          seconds: 15
   postgres:
     enabled: true
     memory: 64  # cloud-sql-proxy v2 sidecar; default 16 is tight under a connection pool
