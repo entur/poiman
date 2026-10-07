@@ -15,9 +15,7 @@ import { POI_TYPES, type PoiType } from "../shared/poiTypes.ts";
 import {
   accessToken,
   api,
-  authDisabled,
   currentUser,
-  editors,
   idToken,
   isEditor,
   onLogout,
@@ -1740,6 +1738,12 @@ function NavBlockDialog() {
 function App() {
   useEffect(() => {
     refresh();
+    api
+      .me()
+      .then((m) => {
+        isEditor.value = m.editor;
+      })
+      .catch((e: unknown) => console.error("failed to load /api/me", e));
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (pendingNav.value !== undefined) pendingNav.value = undefined;
@@ -1832,8 +1836,6 @@ function AuthenticatedApp() {
   // unchanged values are no-ops.
   accessToken.value = auth.user?.access_token ?? null;
   idToken.value = auth.user?.id_token ?? null;
-  // Lower-cased to match the server's canonical form, so isEditor can
-  // compare directly against editors.json.
   const email = auth.user?.profile.email?.toLowerCase() ?? null;
   currentUser.value = email;
 
@@ -1868,12 +1870,8 @@ async function bootstrap(): Promise<void> {
   try {
     const cfg = (await fetch("/config.json").then((r) => r.json())) as {
       oidcConfig: UserManagerSettings | null;
-      editors: string[];
-      authDisabled: boolean;
     };
     oidcConfig = cfg.oidcConfig;
-    editors.value = cfg.editors;
-    authDisabled.value = cfg.authDisabled;
   } catch (err) {
     console.error("failed to load /config.json", err);
   }

@@ -78,3 +78,7 @@ common:
     # in README.md.
     oidc-credentials:
       - OIDC_CLIENT_ID
+    # Comma-separated emails allowed to edit POIs; everyone else is
+    # read-only. Pods read it at startup, so restart after changing it.
+    editors:
+      - EDITORS

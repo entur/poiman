@@ -36,11 +36,13 @@ services:
       #   OIDC_AUTHORITY=https://partner.dev.entur.org
       #   OIDC_AUDIENCE=https://api.dev.entur.io
       #   OIDC_CLIENT_ID=<dev SPA client id from Secret Manager>
+      #   EDITORS=<comma-separated emails>
       # The dev Auth0 client already allows http://localhost:8080.
       DISABLE_AUTH: ${DISABLE_AUTH:-true}
       OIDC_AUTHORITY: ${OIDC_AUTHORITY:-}
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      EDITORS: ${EDITORS:-}
     ports:
       - "8080:8080"
     # Bind-mount the source so `bun --watch` and `bun build --watch`

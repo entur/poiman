@@ -6,7 +6,6 @@ import {
   type JWTVerifyOptions,
   jwtVerify,
 } from "jose";
-import editorsList from "./editors.json" with { type: "json" };
 import {
   audience,
   authDisabled,
@@ -177,12 +176,13 @@ export function emailFor(req: Request): string | null {
   return typeof r.claims.sub === "string" ? r.claims.sub : null;
 }
 
-// Allowlist of accounts permitted to mutate POIs. Every other authenticated
-// user is read-only. Source of truth is editors.json; update by editing
-// that file + deploy. Normalised to lower case so identity providers that
-// vary case in the email claim (Auth0 occasionally does this) match cleanly.
-const EDITORS: ReadonlySet<string> = new Set(
-  editorsList.map((e) => e.toLowerCase()),
+// Accounts permitted to mutate POIs; everyone else is read-only. Comma-
+// separated EDITORS env var, from Secret Manager in deployed envs.
+export const EDITORS: ReadonlySet<string> = new Set(
+  (process.env.EDITORS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter((e) => e !== ""),
 );
 
 // Authorization gate for write endpoints. Strictly the verified email

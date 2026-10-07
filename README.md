@@ -64,17 +64,18 @@ without compose running. To exercise it, `docker compose up -d` first.
 Public:
 
 - `GET /` - SPA
-- `GET /config.json` - `{oidcConfig, editors, authDisabled}` for the SPA
+- `GET /config.json` - `{oidcConfig}` for the SPA
 - `GET /api/export/netex` - live NeTEx XML, consumed by the photon import
 - `GET /liveness` `/readiness` `/metrics`
 
 Authenticated reads (`Authorization: Bearer <access>` + `X-Id-Token: <id>`):
 
+- `GET /api/me` - `{editor}` for the current user
 - `GET /api/pois` - list (excludes soft-deleted)
 - `GET /api/pois/:id`
 - `GET /api/geocode?q=...` - address autocomplete via Entur's geocoder
 
-Editor-only writes (same headers, plus email must be in `src/server/editors.json`):
+Editor-only writes (same headers, plus email must be in `EDITORS`):
 
 - `POST /api/pois`
 - `PUT|DELETE /api/pois/:id`
@@ -103,4 +104,6 @@ migrations run at app startup from `src/server/migrations/*.sql`.
 `helm/poiman/env/values-kub-ent-{dev,tst,prd}.yaml`. The per-env
 `OIDC_CLIENT_ID` lives in Secret Manager (`OIDC_CLIENT_ID` in each GCP
 project) and is mounted via the chart's `secrets:` block as an
-`ExternalSecret`.
+`ExternalSecret`. The editor allowlist is the same: a comma-separated
+`EDITORS` key in each project's Secret Manager. Pods read it at startup,
+so restart the deployment after changing it.

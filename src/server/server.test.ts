@@ -62,6 +62,12 @@ describe.skipIf(!reachable)("server happy path", () => {
     expect("oidcConfig" in body).toBe(true);
   });
 
+  test("/api/me reports editor in dev bypass", async () => {
+    const r = await fetch(`${BASE_URL}/api/me`);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ editor: true });
+  });
+
   test("create -> get -> update -> list -> delete round-trip", async () => {
     const name = `${TEST_TAG} round-trip`;
 

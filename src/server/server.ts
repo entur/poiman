@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { authenticate, isEditor } from "./auth.ts";
+import { authenticate, EDITORS, isEditor } from "./auth.ts";
 import { migrate, waitForDb } from "./db.ts";
 import { authDisabled, devMode, configured as oidcConfigured } from "./oidc.ts";
 import { config } from "./routes/config.ts";
@@ -42,6 +42,10 @@ if (!authDisabled && !oidcConfigured) {
       "local development.",
   );
   process.exit(1);
+}
+
+if (!authDisabled && EDITORS.size === 0) {
+  console.warn("WARNING: EDITORS is empty; every user is read-only.");
 }
 
 // Hard cap on the import body so a malicious or misbehaving client cannot
@@ -151,6 +155,9 @@ async function handle(req: Request, url: URL): Promise<Response> {
     }
   }
 
+  if (pathname === "/api/me" && method === "GET") {
+    return Response.json({ editor: isEditor(req) });
+  }
   if (pathname === "/api/geocode" && method === "GET") return geocode(req);
   if (pathname === "/api/import/netex" && method === "POST") {
     const len = Number(req.headers.get("content-length"));
