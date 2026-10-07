@@ -1,109 +1,78 @@
 # poiman
 
-Internal POI editor for the Norwegian event NeTEx feed.
-
-Replaces the manually-maintained `geocoder-data/events_norway_poi.xml`
-with a Postgres-backed CRUD app. Edits land immediately in the live
-NeTEx export at `GET /api/export/netex`, which `sources-prod.conf`
-points at.
+POI editor for Entur's event NeTEx feed. Edits are served immediately
+as NeTEx at `GET /api/export/netex`, which the geocoder import reads.
 
 ## Stack
 
-- Bun + TypeScript (server, bundler, test runner). The repo uses
-  Bun-only features (an `alias` map in `package.json`, `bun:test`); a
-  `preinstall` script blocks `npm install`. Use `bun install`.
-- Postgres on Cloud SQL (provisioned via Entur's `terraform-google-sql-db`
-  module in `terraform/`; apply with
-  `terraform -chdir=terraform apply -var-file=env/dev.tfvars`)
-- MapLibre GL + Preact + signals (frontend), with `react-oidc-context`
-  for Auth0 login (`react`/`react-dom` aliased to `preact/compat`).
-- Auth: Auth0 SPA flow (Authorization Code + PKCE) via Entur's partner
-  front-door. Backend verifies access tokens against Auth0 JWKS using
-  `jose`. No SSO/IAP at the ingress - auth is in-app.
+- Bun + TypeScript for server, bundler and tests. Use `bun install`;
+  `npm install` is blocked.
+- Postgres on Cloud SQL, provisioned in `terraform/`.
+- Preact + signals + MapLibre GL in the browser.
+- Auth0 login (Authorization Code + PKCE) via Entur's partner login,
+  verified in-app.
 
-## Local dev
+## Local development
 
 ```sh
-docker compose up -d                # postgres + poiman with hot reload
-bun install                         # for editor tooling on the host
+docker compose up -d    # postgres + poiman with hot reload
+bun install             # editor tooling on the host
 open http://localhost:8080
 ```
 
-`docker compose up` runs the prod-style container with `src/`, `dist/`,
-`tsconfig.json`, and `package.json` bind-mounted, plus
-`bun --watch src/server/server.ts` for the server and `bun build --watch`
-for the bundle. Edits on the host trigger reloads in the container.
-
-By default the compose env sets `DISABLE_AUTH=true` and
-`NODE_ENV=development`. In that mode auth is bypassed entirely: the
-backend stamps every edit as `dev@local` (override via `DEV_USER`), and
-the SPA skips `AuthProvider`. The server logs a loud `WARNING` at
-startup whenever `DISABLE_AUTH=true`.
-
-To try the real Auth0 flow locally, drop a `.env` next to
-`docker-compose.yml` (see `.env.example`) with `DISABLE_AUTH=false`
-and the three `OIDC_*` vars; the dev SPA client already lists
-`http://localhost:8080` as an allowed callback. The server refuses to
-start with `DISABLE_AUTH=false` and any of `OIDC_AUTHORITY` /
-`OIDC_CLIENT_ID` / `OIDC_AUDIENCE` unset.
+Compose sets `DISABLE_AUTH=true`: no login, and every edit is stamped
+`dev@local` (override with `DEV_USER`). To use real Auth0 locally, copy
+`.env.example` to `.env` and fill it in.
 
 ## Tests
 
 ```sh
-bun test            # NeTEx serializer + parser (shared fixture), bundle audit,
-                    # and HTTP integration tests against the live compose server
+bun test            # unit tests, plus integration tests if :8080 is up
+bun run lint
 bun run typecheck
 ```
 
-The server integration suite (`src/server/server.test.ts`) is skipped
-when nothing is reachable on port 8080, so a plain `bun test` works
-without compose running. To exercise it, `docker compose up -d` first.
-
 ## Endpoints
 
-Public:
+| Access        | Endpoint                                     |
+| ------------- | -------------------------------------------- |
+| Public        | `GET /`, `/config.json`, `/liveness`, `/readiness`, `/metrics` |
+| Public        | `GET /api/export/netex` - live NeTEx XML     |
+| Logged in     | `GET /api/me`, `/api/pois`, `/api/pois/:id`, `/api/geocode?q=` |
+| Editors       | `POST /api/pois`, `PUT\|DELETE /api/pois/:id` |
+| Editors       | `POST /api/import/netex?mode=merge\|replace` |
 
-- `GET /` - SPA
-- `GET /config.json` - `{oidcConfig}` for the SPA
-- `GET /api/export/netex` - live NeTEx XML, consumed by the photon import
-- `GET /liveness` `/readiness` `/metrics`
+Authenticated requests send `Authorization: Bearer <access token>` and
+`X-Id-Token: <id token>`. The email in the verified ID token is checked
+against `EDITORS`.
 
-Authenticated reads (`Authorization: Bearer <access>` + `X-Id-Token: <id>`):
+## Configuration
 
-- `GET /api/me` - `{editor}` for the current user
-- `GET /api/pois` - list (excludes soft-deleted)
-- `GET /api/pois/:id`
-- `GET /api/geocode?q=...` - address autocomplete via Entur's geocoder
+| Variable                          | Source                    |
+| --------------------------------- | ------------------------- |
+| `OIDC_AUTHORITY`, `OIDC_AUDIENCE` | `helm/poiman/env/*.yaml`  |
+| `OIDC_CLIENT_ID`                  | Secret Manager            |
+| `EDITORS`                         | Secret Manager            |
+| `PG*`                             | Secret Manager, via terraform |
 
-Editor-only writes (same headers, plus email must be in `EDITORS`):
+Migrations in `src/server/migrations/` run at startup. Infrastructure:
+`terraform -chdir=terraform apply -var-file=env/<env>.tfvars`.
 
-- `POST /api/pois`
-- `PUT|DELETE /api/pois/:id`
-- `POST /api/import/netex?mode=merge|replace` - upload NeTEx XML
+## Editors
 
-The access token is validated against
-`${OIDC_AUTHORITY}/.well-known/jwks.json` with `algorithms: [RS256]`,
-`audience: ${OIDC_AUDIENCE}`, and `iss` matching `OIDC_AUTHORITY`. The
-ID token is verified separately with `audience: ${OIDC_CLIENT_ID}` and
-must share the access token's `sub`; its `email` claim is the verified
-identity used for `last_edited_by` and the editor allowlist check.
-
-## Deployment
+Anyone with an Entur login can view POIs. Only emails in the `EDITORS`
+secret can edit. To change who can edit in `<env>` (dev, tst, prd):
 
 ```sh
-helm dependency update helm/poiman
-helm template helm/poiman -f helm/poiman/env/values-kub-ent-dev.yaml
+gcloud secrets versions access latest --secret=EDITORS --project=ent-poiman-<env>
+printf '%s' 'a@entur.org,b@entur.org' |
+  gcloud secrets versions add EDITORS --project=ent-poiman-<env> --data-file=-
 ```
 
-`common.postgres.enabled: true` provisions the CloudSQL Auth Proxy
-sidecar that connects to the instance declared in `terraform/`. Schema
-migrations run at app startup from `src/server/migrations/*.sql`.
+Pass the full list, not just the change. Wait an hour for the cluster to
+sync the secret, then restart poiman:
+`kubectl -n poiman rollout restart deployment/poiman`.
 
-`OIDC_AUTHORITY` and `OIDC_AUDIENCE` are wired via
-`common.configmap.data` per-env in
-`helm/poiman/env/values-kub-ent-{dev,tst,prd}.yaml`. The per-env
-`OIDC_CLIENT_ID` lives in Secret Manager (`OIDC_CLIENT_ID` in each GCP
-project) and is mounted via the chart's `secrets:` block as an
-`ExternalSecret`. The editor allowlist is the same: a comma-separated
-`EDITORS` key in each project's Secret Manager. Pods read it at startup,
-so restart the deployment after changing it.
+## License
+
+[EUPL-1.2](LICENSE.md)

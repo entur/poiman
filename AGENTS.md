@@ -97,6 +97,9 @@ in `src/server/auth.ts`.
   every `/api/*` path except `GET /api/export/netex` (consumed by the
   photon importer). Result is memoised per `Request` via a `WeakMap`;
   routes call `emailFor(req)` to read the email without re-verifying.
+- Editors: writes require the verified ID-token email to be in the
+  comma-separated `EDITORS` env var (Secret Manager). The SPA learns
+  its role from `GET /api/me`; never expose the list publicly.
 - Public routes: `/liveness`, `/readiness`, `/metrics`, `/config.json`,
   and `GET /api/export/netex`. Adding a new public path requires touching
   the gate in `server.ts` deliberately.
