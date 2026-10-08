@@ -5,6 +5,3 @@ dist/
 .env.local
 bun.lockb
 .DS_Store
-
-# Helm: lock file is committed, downloaded subcharts are not.
-helm/*/charts/

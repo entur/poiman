@@ -7,7 +7,7 @@ as NeTEx at `GET /api/export/netex`, which the geocoder import reads.
 
 - Bun + TypeScript for server, bundler and tests. Use `bun install`;
   `npm install` is blocked.
-- Postgres on Cloud SQL, provisioned in `terraform/`.
+- Postgres on Cloud SQL.
 - Preact + signals + MapLibre GL in the browser.
 - Auth0 login (Authorization Code + PKCE) via Entur's partner login,
   verified in-app.
@@ -50,28 +50,18 @@ against `EDITORS`.
 
 | Variable                          | Source                    |
 | --------------------------------- | ------------------------- |
-| `OIDC_AUTHORITY`, `OIDC_AUDIENCE` | `helm/poiman/env/*.yaml`  |
+| `OIDC_AUTHORITY`, `OIDC_AUDIENCE` | Helm values               |
 | `OIDC_CLIENT_ID`                  | Secret Manager            |
 | `EDITORS`                         | Secret Manager            |
-| `PG*`                             | Secret Manager, via terraform |
+| `PG*`                             | Secret Manager            |
 
-Migrations in `src/server/migrations/` run at startup. Infrastructure:
-`terraform -chdir=terraform apply -var-file=env/<env>.tfvars`.
+Migrations in `src/server/migrations/` run at startup.
 
-## Editors
+## Deployment
 
-Anyone with an Entur login can view POIs. Only emails in the `EDITORS`
-secret can edit. To change who can edit in `<env>` (dev, tst, prd):
-
-```sh
-gcloud secrets versions access latest --secret=EDITORS --project=ent-poiman-<env>
-printf '%s' 'a@entur.org,b@entur.org' |
-  gcloud secrets versions add EDITORS --project=ent-poiman-<env> --data-file=-
-```
-
-Pass the full list, not just the change. Wait an hour for the cluster to
-sync the secret, then restart poiman:
-`kubectl -n poiman rollout restart deployment/poiman`.
+Helm, Terraform and deploys live in the private
+`entur/poiman-deployment-config`, which also documents how to manage
+editors. A push to `main` here triggers a deploy there.
 
 ## License
 

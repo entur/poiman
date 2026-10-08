@@ -2,7 +2,6 @@ node_modules
 dist
 .git
 .github
-helm
 *.md
 .env
 .env.local
