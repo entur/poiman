@@ -71,10 +71,12 @@ jobs:
         if: always()
         run: cat server.log || true
 
-  # Plain build: gha-docker's build.yml requires GCP credentials, which this
-  # public repo does not have. The artifact layout matches what docker-scan
-  # expects (artifact `poiman` holding `poiman.tar`).
+  # PRs only: on main, poiman-deployment-config builds and scans the image it
+  # deploys. Plain build because gha-docker's build.yml requires GCP
+  # credentials, which this public repo does not have. The artifact layout
+  # matches what docker-scan expects (artifact `poiman` holding `poiman.tar`).
   docker-build:
+    if: github.event_name == 'pull_request'
     needs: [test, lint]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -109,7 +111,7 @@ jobs:
   # Build, push and deploy happen in the private entur/poiman-deployment-config.
   trigger-deploy:
     if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && github.repository_owner == 'entur' }}
-    needs: [docker-build, scan]
+    needs: [test, lint]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: deploy-trigger
