@@ -1,11 +1,14 @@
 import { batch, computed, effect, signal } from "@preact/signals";
-import maplibregl, {
+import {
   type FlyToOptions,
   type GeoJSONSource,
+  LngLatBounds,
   type MapGeoJSONFeature,
   type MapMouseEvent,
   type MapTouchEvent,
-  type Map as MlMap,
+  Map as MlMap,
+  NavigationControl,
+  Popup,
 } from "maplibre-gl";
 import { type UserManagerSettings, WebStorageStateStore } from "oidc-client-ts";
 import { render } from "preact";
@@ -604,7 +607,7 @@ function MapView() {
 
   useEffect(() => {
     if (!ref.current) return;
-    const map = new maplibregl.Map({
+    const map = new MlMap({
       container: ref.current,
       style: {
         version: 8,
@@ -622,12 +625,9 @@ function MapView() {
       zoom: 5,
     });
     mapRef.current = map;
-    map.addControl(
-      new maplibregl.NavigationControl({ showCompass: false }),
-      "top-right",
-    );
+    map.addControl(new NavigationControl({ showCompass: false }), "top-right");
 
-    const tooltip = new maplibregl.Popup({
+    const tooltip = new Popup({
       closeButton: false,
       closeOnClick: false,
       offset: 12,
@@ -714,7 +714,7 @@ function MapView() {
         const list = pois.value;
         if (list.length === 0 || initialFitDone.current) return;
         initialFitDone.current = true;
-        const b = new maplibregl.LngLatBounds();
+        const b = new LngLatBounds();
         for (const p of list) b.extend([p.longitude, p.latitude]);
         map.fitBounds(b, { padding: 40, maxZoom: 12, duration: 0 });
       });
