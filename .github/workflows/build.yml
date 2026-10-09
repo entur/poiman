@@ -120,7 +120,10 @@ jobs:
       - env:
           GH_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
         # REST dispatch with an explicit ref: the token only has Actions access,
-        # which `gh workflow run`'s default-branch lookup can't use.
+        # which `gh workflow run`'s default-branch lookup can't use. A missing
+        # run link must not fail the job once the dispatch went through.
         run: |
-          gh api -X POST repos/entur/poiman-deployment-config/actions/workflows/deploy.yml/dispatches \
-            -f ref=main -f "inputs[sha]=$GITHUB_SHA"
+          out=$(gh api -X POST repos/entur/poiman-deployment-config/actions/workflows/deploy.yml/dispatches \
+            -f ref=main -f "inputs[sha]=$GITHUB_SHA" -F return_run_details=true)
+          url=$(jq -r '.html_url // empty' <<<"$out" 2>/dev/null || true)
+          echo "Deploy run: ${url:-https://github.com/entur/poiman-deployment-config/actions/workflows/deploy.yml}" | tee -a "$GITHUB_STEP_SUMMARY"
