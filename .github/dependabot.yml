@@ -1,20 +1,47 @@
+# One PR per dependency so Freyja can assess and merge it (no groups).
+# 4 day cooldown, except for the Entur packages listed under exclude.
 version: 2
 updates:
   - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
-    groups:
-      bun-minor-patch:
-        update-types: ["minor", "patch"]
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      actions:
-        patterns: ["*"]
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Oslo"
+    open-pull-requests-limit: 100
+    cooldown:
+      default-days: 4
+      exclude: ["@entur/*"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Oslo"
+    open-pull-requests-limit: 100
+    cooldown:
+      default-days: 4
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Oslo"
+    open-pull-requests-limit: 100
+    cooldown:
+      default-days: 4
+      exclude: ["entur/*"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
