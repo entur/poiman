@@ -1,4 +1,4 @@
-FROM oven/bun:1.4-alpine AS build
+FROM oven/bun:1.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS build
 WORKDIR /app
 
 COPY package.json bun.lock* ./
@@ -16,14 +16,14 @@ RUN bun run build
 # Local-development target (docker-compose builds this). Alpine keeps a shell
 # for compose's `sh -c` watcher command; the distroless prod stage has none.
 # Source is bind-mounted at runtime; the baked node_modules is used as-is.
-FROM oven/bun:1.4-alpine AS dev
+FROM oven/bun:1.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS dev
 WORKDIR /app
 COPY package.json bun.lock* ./
 COPY scripts ./scripts
 RUN bun install --frozen-lockfile
 EXPOSE 8080
 
-FROM oven/bun:1.4-distroless
+FROM oven/bun:1.4-distroless@sha256:153a951ae40106e125898103e6e990ee0f38e6aee7f561029e26cf9fbed23470
 WORKDIR /app
 
 ENV NODE_ENV=production PORT=8080
