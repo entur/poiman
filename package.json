@@ -21,7 +21,7 @@
     "jose": "^6.2.13",
     "maplibre-gl": "^6.15.0",
     "oidc-client-ts": "^3.5.0",
-    "preact": "^11.0.0",
+    "preact": "^11.1.0",
     "react-oidc-context": "^3.3.1"
   },
   "alias": {
