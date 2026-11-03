@@ -59,7 +59,7 @@ Migrations in `src/server/migrations/` run at startup.
 
 ## Deployment
 
-Helm, Terraform and deploys live in the private
+Helm, Terraform and deploys live in the internal
 `entur/poiman-deployment-config`, which also documents how to manage
 editors. A push to `main` here triggers a deploy there.
 
