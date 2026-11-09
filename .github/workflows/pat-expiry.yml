@@ -6,7 +6,7 @@ name: Deploy token expiry
 
 on:
   schedule:
-    - cron: "0 7 * * 1"
+    - cron: "55 1 * * 1"
   workflow_dispatch:
 
 permissions: {}
