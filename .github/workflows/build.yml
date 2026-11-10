@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   lint:
-    uses: entur/gha-docker/.github/workflows/lint.yml@dcdc76ce2d251de20f35a92c566d8fe99036e03e # v1.13.0
+    uses: entur/gha-docker/.github/workflows/lint.yml@v1
 
   test:
     runs-on: ubuntu-latest
@@ -83,7 +83,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: entur/gha-docker/.github/workflows/build.yml@a1d476b895a271d0fe8557f1b763529b64fb0554 # v1.14.0
+    uses: entur/gha-docker/.github/workflows/build.yml@v1
     with:
       authenticate: false
 
@@ -96,7 +96,7 @@ jobs:
       pull-requests: write
       security-events: write
       actions: read
-    uses: entur/gha-security/.github/workflows/docker-scan.yml@0962fb4f3f9004eeaea88582db8639e140ec6fda # v2.17.1
+    uses: entur/gha-security/.github/workflows/docker-scan.yml@v2
     with:
       image_artifact: ${{ needs.docker-build.outputs.image_artifact }}
 
